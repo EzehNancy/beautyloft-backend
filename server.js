@@ -11,6 +11,8 @@ const PORT = process.env.PORT || 3000;
 
 const allowedOrigins = ['http://127.0.0.1:5500', 'https://beautyloft.vercel.app'];
 
+const SQLiteStore = require('connect-sqlite3')(session);
+
 app.use(cors({
   origin: function(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -24,6 +26,7 @@ app.use(cors({
 
 app.use(express.json());
 app.use(session({
+  store: new SQLiteStore({ db: 'sessions.db', dir: '.' }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
