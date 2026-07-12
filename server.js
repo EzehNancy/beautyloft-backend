@@ -223,14 +223,6 @@ app.patch('/admin/appointments/:id', function(req, res) {
 });
 
 
-  const result = db.prepare('UPDATE users SET is_admin = 1 WHERE email = ?').run(email);
-
-  if (result.changes === 0) {
-    return res.status(404).json({ error: 'No user found with that email.' });
-  }
-
-  res.json({ success: true, message: email + ' is now an admin.' });
-});
 
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
