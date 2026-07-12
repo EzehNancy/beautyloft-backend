@@ -222,12 +222,6 @@ app.patch('/admin/appointments/:id', function(req, res) {
   res.json({ success: true });
 });
 
-app.post('/setup-admin', function(req, res) {
-  const { email, key } = req.body;
-
-  if (key !== process.env.ADMIN_SETUP_KEY) {
-    return res.status(403).json({ error: 'Invalid key.' });
-  }
 
   const result = db.prepare('UPDATE users SET is_admin = 1 WHERE email = ?').run(email);
 
@@ -241,3 +235,5 @@ app.post('/setup-admin', function(req, res) {
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 });
+
+
