@@ -3,15 +3,13 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const session = require('express-session');
+const crypto = require('crypto');
 const db = require('./database.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const allowedOrigins = ['http://127.0.0.1:5500', 'https://beautyloft.vercel.app'];
-
-const SQLiteStore = require('connect-sqlite3')(session);
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -20,22 +18,34 @@ app.use(cors({
     } else {
       callback(new Error('Not allowed by CORS'));
     }
-  },
-  credentials: true
+  }
 }));
 
 app.use(express.json());
-app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db', dir: '.' }),
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: 1000 * 60 * 60 * 24 * 7,
-    sameSite: 'none',
-    secure: true
+
+function getUserIdFromToken(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
   }
-}));
+  const token = authHeader.split(' ')[1];
+  const row = db.prepare('SELECT user_id FROM auth_tokens WHERE token = ?').get(token);
+  return row ? row.user_id : null;
+}
+
+function requireAdmin(req, res) {
+  const userId = getUserIdFromToken(req);
+  if (!userId) {
+    res.status(401).json({ error: 'Not logged in.' });
+    return null;
+  }
+  const currentUser = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+  if (!currentUser || !currentUser.is_admin) {
+    res.status(403).json({ error: 'Admins only.' });
+    return null;
+  }
+  return userId;
+}
 
 app.get('/', (req, res) => {
   res.send('Hello from The BeautyLoft backend!');
@@ -87,38 +97,37 @@ app.post('/login', async function(req, res) {
     return res.status(401).json({ error: 'Invalid email or password.' });
   }
 
-  req.session.userId = user.id;
+  const token = crypto.randomBytes(32).toString('hex');
+  db.prepare('INSERT INTO auth_tokens (token, user_id) VALUES (?, ?)').run(token, user.id);
 
   res.json({
     success: true,
+    token: token,
     user: { id: user.id, name: user.name, email: user.email }
   });
 });
 
 app.get('/me', function(req, res) {
-  if (!req.session.userId) {
+  const userId = getUserIdFromToken(req);
+  if (!userId) {
     return res.status(401).json({ error: 'Not logged in.' });
   }
 
-  const user = db.prepare('SELECT id, name, email, is_admin FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, name, email, is_admin FROM users WHERE id = ?').get(userId);
   res.json({ user: user });
 });
 
 app.post('/logout', function(req, res) {
-  req.session.destroy(function() {
-    res.json({ success: true });
-  });
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    db.prepare('DELETE FROM auth_tokens WHERE token = ?').run(token);
+  }
+  res.json({ success: true });
 });
 
 app.get('/admin/stats', function(req, res) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Not logged in.' });
-  }
-
-  const currentUser = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.session.userId);
-  if (!currentUser || !currentUser.is_admin) {
-    return res.status(403).json({ error: 'Admins only.' });
-  }
+  if (!requireAdmin(req, res)) return;
 
   const totalCustomers = db.prepare('SELECT COUNT(*) AS count FROM users WHERE is_admin = 0').get().count;
 
@@ -137,14 +146,7 @@ app.get('/admin/stats', function(req, res) {
 });
 
 app.get('/admin/recent-activity', function(req, res) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Not logged in.' });
-  }
-
-  const currentUser = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.session.userId);
-  if (!currentUser || !currentUser.is_admin) {
-    return res.status(403).json({ error: 'Admins only.' });
-  }
+  if (!requireAdmin(req, res)) return;
 
   const recentUsers = db.prepare(
     'SELECT name, created_at FROM users WHERE is_admin = 0 ORDER BY created_at DESC LIMIT 5'
@@ -161,7 +163,8 @@ app.get('/admin/recent-activity', function(req, res) {
 });
 
 app.post('/appointments', function(req, res) {
-  if (!req.session.userId) {
+  const userId = getUserIdFromToken(req);
+  if (!userId) {
     return res.status(401).json({ error: 'You must be logged in to book.' });
   }
 
@@ -173,32 +176,26 @@ app.post('/appointments', function(req, res) {
 
   const result = db.prepare(
     'INSERT INTO appointments (user_id, service, appointment_date, appointment_time, notes, booking_ref) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(req.session.userId, service, date, time, notes || '', bookingRef);
+  ).run(userId, service, date, time, notes || '', bookingRef);
 
   res.json({ success: true, appointmentId: result.lastInsertRowid });
 });
 
 app.get('/my-appointments', function(req, res) {
-  if (!req.session.userId) {
+  const userId = getUserIdFromToken(req);
+  if (!userId) {
     return res.status(401).json({ error: 'Not logged in.' });
   }
 
   const appointments = db.prepare(
     'SELECT * FROM appointments WHERE user_id = ? ORDER BY appointment_date DESC'
-  ).all(req.session.userId);
+  ).all(userId);
 
   res.json({ appointments: appointments });
 });
 
 app.get('/admin/appointments', function(req, res) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Not logged in.' });
-  }
-
-  const currentUser = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.session.userId);
-  if (!currentUser || !currentUser.is_admin) {
-    return res.status(403).json({ error: 'Admins only.' });
-  }
+  if (!requireAdmin(req, res)) return;
 
   const appointments = db.prepare(`
     SELECT appointments.*, users.name AS customer_name, users.email AS customer_email
@@ -211,14 +208,7 @@ app.get('/admin/appointments', function(req, res) {
 });
 
 app.patch('/admin/appointments/:id', function(req, res) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Not logged in.' });
-  }
-
-  const currentUser = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.session.userId);
-  if (!currentUser || !currentUser.is_admin) {
-    return res.status(403).json({ error: 'Admins only.' });
-  }
+  if (!requireAdmin(req, res)) return;
 
   const { status } = req.body;
   const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
@@ -230,10 +220,6 @@ app.patch('/admin/appointments/:id', function(req, res) {
   db.prepare('UPDATE appointments SET status = ? WHERE id = ?').run(status, req.params.id);
 
   res.json({ success: true });
-});
-
-app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
 });
 
 app.post('/setup-admin', function(req, res) {
@@ -250,4 +236,8 @@ app.post('/setup-admin', function(req, res) {
   }
 
   res.json({ success: true, message: email + ' is now an admin.' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server is running at http://localhost:${PORT}`);
 });
