@@ -1,4 +1,4 @@
-const db = require('./database.js');
+const pool = require('./database.js');
 
 const email = process.argv[2];
 
@@ -7,10 +7,16 @@ if (!email) {
   process.exit(1);
 }
 
-const result = db.prepare('UPDATE users SET is_admin = 1 WHERE email = ?').run(email);
+async function run() {
+  const result = await pool.query('UPDATE users SET is_admin = 1 WHERE email = $1', [email]);
 
-if (result.changes === 0) {
-  console.log('No user found with that email.');
-} else {
-  console.log(email + ' is now an admin.');
+  if (result.rowCount === 0) {
+    console.log('No user found with that email.');
+  } else {
+    console.log(email + ' is now an admin.');
+  }
+
+  process.exit();
 }
+
+run();

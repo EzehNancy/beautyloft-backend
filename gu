@@ -1,0 +1,1 @@
+curl -X POST https://beautyloft-backend.onrender.com/setup-admin -H "Content-Type: application/json" -d "{\"email\":\"nancyezeh345@gmail.com\",\"key\":\"jhbsi23yr89rhwe834rgbhedn3ueg32bd\"}"
