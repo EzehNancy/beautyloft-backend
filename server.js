@@ -252,3 +252,32 @@ app.post('/setup-admin', function(req, res) {
   res.json({ success: true, message: email + ' is now an admin.' });
 });
 
+app.post('/model-applications', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'You must be logged in to apply.' });
+  }
+
+  const { age, phone, socialHandle, interest, availability, about, portfolioLink } = req.body;
+
+  if (!age || !interest) {
+    return res.status(400).json({ error: 'Age and area of interest are required.' });
+  }
+
+  const existingResult = await pool.query(
+    'SELECT id FROM model_applications WHERE user_id = $1',
+    [userId]
+  );
+
+  if (existingResult.rows[0]) {
+    return res.status(409).json({ error: 'You have already submitted an application.' });
+  }
+
+  const result = await pool.query(
+    `INSERT INTO model_applications (user_id, age, phone, social_handle, interest, availability, about, portfolio_link)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [userId, age, phone || '', socialHandle || '', interest, availability || '', about || '', portfolioLink || '']
+  );
+
+  res.json({ success: true, applicationId: result.rows[0].id });
+});

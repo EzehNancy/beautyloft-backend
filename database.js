@@ -41,6 +41,22 @@ async function setupTables() {
   `);
 
   console.log('Database tables ready.');
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS model_applications (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      age INTEGER NOT NULL,
+      phone TEXT,
+      social_handle TEXT,
+      interest TEXT NOT NULL,
+      availability TEXT,
+      about TEXT,
+      portfolio_link TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
 }
 
 setupTables();
