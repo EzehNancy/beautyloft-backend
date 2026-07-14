@@ -512,3 +512,34 @@ app.delete('/admin/availability-overrides/:date', async function(req, res) {
 
   res.json({ success: true });
 });
+
+app.patch('/appointments/:id/reschedule', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  const { date, time } = req.body;
+  if (!date || !time) {
+    return res.status(400).json({ error: 'Date and time are required.' });
+  }
+
+  const apptResult = await pool.query('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+  const appointment = apptResult.rows[0];
+
+  if (!appointment) {
+    return res.status(404).json({ error: 'Appointment not found.' });
+  }
+
+  const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [userId]);
+  const isAdmin = userResult.rows[0] && userResult.rows[0].is_admin;
+
+  if (appointment.user_id !== userId && !isAdmin) {
+    return res.status(403).json({ error: 'You can only reschedule your own appointments.' });
+  }
+
+  await pool.query(
+    'UPDATE appointments SET appointment_date = $1, appointment_time = $2, status = $3 WHERE id = $4',
+    [date, time, 'rescheduled', req.params.id]
+  );
+});
