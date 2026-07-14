@@ -57,6 +57,27 @@ async function setupTables() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS availability_overrides (
+      id SERIAL PRIMARY KEY,
+      override_date TEXT UNIQUE NOT NULL,
+      override_type TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS model_bookings (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      booking_date TEXT NOT NULL,
+      booking_time TEXT NOT NULL,
+      notes TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
 }
 
 setupTables();

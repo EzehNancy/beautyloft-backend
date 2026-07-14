@@ -333,3 +333,68 @@ app.patch('/admin/model-applications/:id', async function(req, res) {
 
   res.json({ success: true });
 });
+
+function hoursForDay(weekday) {
+  if (weekday === 0) return [];
+  if (weekday === 6) return [12, 13, 14, 15, 16];
+  return [10, 11, 12, 13, 14, 15, 16];
+}
+
+app.get('/availability', async function(req, res) {
+  const { date, bookingType } = req.query;
+
+  if (!date || !bookingType) {
+    return res.status(400).json({ error: 'Date and booking type are required.' });
+  }
+
+  const overrideResult = await pool.query(
+    'SELECT override_type FROM availability_overrides WHERE override_date = $1',
+    [date]
+  );
+  const override = overrideResult.rows[0];
+
+  if (override && override.override_type === 'closed') {
+    return res.json({ closed: true, slots: [] });
+  }
+
+  if (override && override.override_type === 'models_only' && bookingType === 'customer') {
+    return res.json({ closed: true, slots: [] });
+  }
+
+  const weekday = new Date(date + 'T00:00:00').getDay();
+  const allHours = hoursForDay(weekday);
+
+  const apptResult = await pool.query(
+    'SELECT appointment_time FROM appointments WHERE appointment_date = $1 AND status != $2',
+    [date, 'cancelled']
+  );
+  const modelResult = await pool.query(
+    'SELECT booking_time FROM model_bookings WHERE booking_date = $1 AND status != $2',
+    [date, 'cancelled']
+  );
+
+  const bookedHours = [];
+  apptResult.rows.forEach(function(row) {
+    bookedHours.push(parseTimeToHour(row.appointment_time));
+  });
+  modelResult.rows.forEach(function(row) {
+    bookedHours.push(parseTimeToHour(row.booking_time));
+  });
+
+  const slots = allHours.map(function(hour) {
+    const isBlocked = bookedHours.some(function(bookedHour) {
+      return Math.abs(bookedHour - hour) < 4;
+    });
+    return { hour: hour, available: !isBlocked };
+  });
+
+  res.json({ closed: false, slots: slots });
+});
+
+function parseTimeToHour(timeLabel) {
+  const match = timeLabel.match(/(\d+):00 (AM|PM)/);
+  let hour = parseInt(match[1], 10);
+  if (match[2] === 'PM' && hour !== 12) hour += 12;
+  if (match[2] === 'AM' && hour === 12) hour = 0;
+  return hour;
+}
