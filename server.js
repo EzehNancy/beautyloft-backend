@@ -171,27 +171,58 @@ app.get('/admin/recent-activity', async function(req, res) {
     };
   });
 
-  const modelResult = await pool.query(`
+  const modelAppResult = await pool.query(`
     SELECT users.name AS applicant_name, model_applications.created_at
     FROM model_applications
     JOIN users ON model_applications.user_id = users.id
     ORDER BY model_applications.created_at DESC
     LIMIT 5
   `);
-  const modelActivity = modelResult.rows.map(function(app) {
+  const modelAppActivity = modelAppResult.rows.map(function(app) {
     return {
       message: app.applicant_name + ' submitted a model application',
       time: app.created_at
     };
   });
 
-  const combined = userActivity.concat(modelActivity);
+  const apptResult = await pool.query(`
+    SELECT users.name AS customer_name, appointments.service, appointments.created_at
+    FROM appointments
+    JOIN users ON appointments.user_id = users.id
+    ORDER BY appointments.created_at DESC
+    LIMIT 5
+  `);
+  const apptActivity = apptResult.rows.map(function(appt) {
+    return {
+      message: appt.customer_name + ' booked ' + appt.service,
+      time: appt.created_at
+    };
+  });
+
+  const modelBookingResult = await pool.query(`
+    SELECT users.name AS model_name, model_bookings.booking_date, model_bookings.booking_time, model_bookings.created_at
+    FROM model_bookings
+    JOIN users ON model_bookings.user_id = users.id
+    ORDER BY model_bookings.created_at DESC
+    LIMIT 5
+  `);
+  const modelBookingActivity = modelBookingResult.rows.map(function(booking) {
+    return {
+      message: booking.model_name + ' booked a modelling session for ' + booking.booking_date + ' at ' + booking.booking_time,
+      time: booking.created_at
+    };
+  });
+
+  const combined = userActivity
+    .concat(modelAppActivity)
+    .concat(apptActivity)
+    .concat(modelBookingActivity);
 
   combined.sort(function(a, b) {
     return new Date(b.time) - new Date(a.time);
   });
 
-  res.json({ activity: combined.slice(0, 5) });
+  res.json({ activity: combined.slice(0, 8) });
 });
 
 app.post('/appointments', async function(req, res) {
