@@ -161,18 +161,37 @@ app.get('/admin/stats', async function(req, res) {
 app.get('/admin/recent-activity', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
-  const result = await pool.query(
+  const usersResult = await pool.query(
     'SELECT name, created_at FROM users WHERE is_admin = 0 ORDER BY created_at DESC LIMIT 5'
   );
-
-  const activity = result.rows.map(function(user) {
+  const userActivity = usersResult.rows.map(function(user) {
     return {
       message: user.name + ' created an account',
       time: user.created_at
     };
   });
 
-  res.json({ activity: activity });
+  const modelResult = await pool.query(`
+    SELECT users.name AS applicant_name, model_applications.created_at
+    FROM model_applications
+    JOIN users ON model_applications.user_id = users.id
+    ORDER BY model_applications.created_at DESC
+    LIMIT 5
+  `);
+  const modelActivity = modelResult.rows.map(function(app) {
+    return {
+      message: app.applicant_name + ' submitted a model application',
+      time: app.created_at
+    };
+  });
+
+  const combined = userActivity.concat(modelActivity);
+
+  combined.sort(function(a, b) {
+    return new Date(b.time) - new Date(a.time);
+  });
+
+  res.json({ activity: combined.slice(0, 5) });
 });
 
 app.post('/appointments', async function(req, res) {
