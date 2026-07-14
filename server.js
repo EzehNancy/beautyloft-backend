@@ -281,3 +281,31 @@ app.post('/model-applications', async function(req, res) {
 
   res.json({ success: true, applicationId: result.rows[0].id });
 });
+
+app.get('/admin/model-applications', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const result = await pool.query(`
+    SELECT model_applications.*, users.name AS customer_name, users.email AS customer_email
+    FROM model_applications
+    JOIN users ON model_applications.user_id = users.id
+    ORDER BY created_at DESC
+  `);
+
+  res.json({ applications: result.rows });
+});
+
+app.patch('/admin/model-applications/:id', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const { status } = req.body;
+  const validStatuses = ['pending', 'accepted', 'rejected'];
+
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status.' });
+  }
+
+  await pool.query('UPDATE model_applications SET status = $1 WHERE id = $2', [status, req.params.id]);
+
+  res.json({ success: true });
+});
