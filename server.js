@@ -398,3 +398,48 @@ function parseTimeToHour(timeLabel) {
   if (match[2] === 'AM' && hour === 12) hour = 0;
   return hour;
 }
+
+app.get('/my-model-status', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  const result = await pool.query(
+    'SELECT status FROM model_applications WHERE user_id = $1',
+    [userId]
+  );
+
+  const application = result.rows[0];
+  res.json({ status: application ? application.status : 'none' });
+});
+
+app.post('/model-bookings', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'You must be logged in.' });
+  }
+
+  const statusResult = await pool.query(
+    'SELECT status FROM model_applications WHERE user_id = $1',
+    [userId]
+  );
+  const application = statusResult.rows[0];
+
+  if (!application || application.status !== 'accepted') {
+    return res.status(403).json({ error: 'Only approved models can book sessions.' });
+  }
+
+  const { date, time, notes } = req.body;
+
+  if (!date || !time) {
+    return res.status(400).json({ error: 'Date and time are required.' });
+  }
+
+  const result = await pool.query(
+    'INSERT INTO model_bookings (user_id, booking_date, booking_time, notes) VALUES ($1, $2, $3, $4) RETURNING id',
+    [userId, date, time, notes || '']
+  );
+
+  res.json({ success: true, bookingId: result.rows[0].id });
+});
