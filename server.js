@@ -443,3 +443,41 @@ app.post('/model-bookings', async function(req, res) {
 
   res.json({ success: true, bookingId: result.rows[0].id });
 });
+
+app.get('/admin/availability-overrides', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const result = await pool.query(
+    'SELECT * FROM availability_overrides ORDER BY override_date ASC'
+  );
+
+  res.json({ overrides: result.rows });
+});
+
+app.post('/admin/availability-overrides', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const { date, type } = req.body;
+  const validTypes = ['closed', 'models_only'];
+
+  if (!date || !validTypes.includes(type)) {
+    return res.status(400).json({ error: 'A valid date and type are required.' });
+  }
+
+  await pool.query(
+    `INSERT INTO availability_overrides (override_date, override_type)
+     VALUES ($1, $2)
+     ON CONFLICT (override_date) DO UPDATE SET override_type = $2`,
+    [date, type]
+  );
+
+  res.json({ success: true });
+});
+
+app.delete('/admin/availability-overrides/:date', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  await pool.query('DELETE FROM availability_overrides WHERE override_date = $1', [req.params.date]);
+
+  res.json({ success: true });
+});
