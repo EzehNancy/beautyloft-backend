@@ -144,12 +144,17 @@ app.get('/admin/stats', async function(req, res) {
   );
   const todaysAppointments = parseInt(apptResult.rows[0].count, 10);
 
+  const modelResult = await pool.query(
+    "SELECT COUNT(*) AS count FROM model_applications WHERE status = 'pending'"
+  );
+  const pendingModelApplications = parseInt(modelResult.rows[0].count, 10);
+
   res.json({
     totalCustomers: totalCustomers,
     todaysAppointments: todaysAppointments,
     pendingOrders: 0,
     totalProducts: 0,
-    pendingModelApplications: 0
+    pendingModelApplications: pendingModelApplications
   });
 });
 
