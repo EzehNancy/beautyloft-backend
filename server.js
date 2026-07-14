@@ -350,17 +350,33 @@ app.get('/admin/model-applications', async function(req, res) {
   res.json({ applications: result.rows });
 });
 
-app.patch('/admin/model-applications/:id', async function(req, res) {
+app.patch('/admin/model-bookings/:id', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
   const { status } = req.body;
-  const validStatuses = ['pending', 'accepted', 'rejected'];
+  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Invalid status.' });
   }
 
-  await pool.query('UPDATE model_applications SET status = $1 WHERE id = $2', [status, req.params.id]);
+  await pool.query('UPDATE model_bookings SET status = $1 WHERE id = $2', [status, req.params.id]);
+
+  res.json({ success: true });
+});
+
+app.patch('/admin/model-bookings/:id/reschedule', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const { date, time } = req.body;
+  if (!date || !time) {
+    return res.status(400).json({ error: 'Date and time are required.' });
+  }
+
+  await pool.query(
+    'UPDATE model_bookings SET booking_date = $1, booking_time = $2, status = $3 WHERE id = $4',
+    [date, time, 'rescheduled', req.params.id]
+  );
 
   res.json({ success: true });
 });
@@ -542,4 +558,32 @@ app.patch('/appointments/:id/reschedule', async function(req, res) {
     'UPDATE appointments SET appointment_date = $1, appointment_time = $2, status = $3 WHERE id = $4',
     [date, time, 'rescheduled', req.params.id]
   );
+});
+
+app.get('/my-model-bookings', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  const result = await pool.query(
+    'SELECT * FROM model_bookings WHERE user_id = $1 ORDER BY booking_date DESC',
+    [userId]
+  );
+
+  res.json({ bookings: result.rows });
+});
+
+app.get('/admin/model-bookings', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const result = await pool.query(`
+    SELECT model_bookings.*, users.name AS model_name, users.email AS model_email, model_applications.phone AS model_phone
+    FROM model_bookings
+    JOIN users ON model_bookings.user_id = users.id
+    LEFT JOIN model_applications ON model_applications.user_id = model_bookings.user_id
+    ORDER BY model_bookings.booking_date DESC
+  `);
+
+  res.json({ bookings: result.rows });
 });
