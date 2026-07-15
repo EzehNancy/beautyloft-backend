@@ -78,6 +78,13 @@ async function setupTables() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  await pool.query(`
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
+  `);
+  await pool.query(`
+    ALTER TABLE model_bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
+  `);
 }
 
 setupTables();
