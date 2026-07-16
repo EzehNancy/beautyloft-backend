@@ -147,20 +147,20 @@ app.get('/admin/stats', async function(req, res) {
   const modelResult = await pool.query(
     "SELECT COUNT(*) AS count FROM model_applications WHERE status = 'pending'"
   );
+  const pendingModelApplications = parseInt(modelResult.rows[0].count, 10);
 
   const modelsCountResult = await pool.query(
     "SELECT COUNT(*) AS count FROM model_applications WHERE status = 'accepted'"
   );
   const totalModels = parseInt(modelsCountResult.rows[0].count, 10);
-  const pendingModelApplications = parseInt(modelResult.rows[0].count, 10);
 
   res.json({
     totalCustomers: totalCustomers,
+    totalModels: totalModels,
     todaysAppointments: todaysAppointments,
     pendingOrders: 0,
     totalProducts: 0,
-    pendingModelApplications: pendingModelApplications,
-    totalModels: totalModels
+    pendingModelApplications: pendingModelApplications
   });
 });
 
@@ -219,10 +219,42 @@ app.get('/admin/recent-activity', async function(req, res) {
     };
   });
 
+  const apptRescheduleResult = await pool.query(`
+    SELECT users.name AS customer_name, appointments.updated_at
+    FROM appointments
+    JOIN users ON appointments.user_id = users.id
+    WHERE appointments.status = 'rescheduled'
+    ORDER BY appointments.updated_at DESC
+    LIMIT 5
+  `);
+  const apptRescheduleActivity = apptRescheduleResult.rows.map(function(appt) {
+    return {
+      message: appt.customer_name + ' rescheduled their appointment',
+      time: appt.updated_at
+    };
+  });
+
+  const modelRescheduleResult = await pool.query(`
+    SELECT users.name AS model_name, model_bookings.updated_at
+    FROM model_bookings
+    JOIN users ON model_bookings.user_id = users.id
+    WHERE model_bookings.status = 'rescheduled'
+    ORDER BY model_bookings.updated_at DESC
+    LIMIT 5
+  `);
+  const modelRescheduleActivity = modelRescheduleResult.rows.map(function(b) {
+    return {
+      message: b.model_name + ' rescheduled their modelling session',
+      time: b.updated_at
+    };
+  });
+
   const combined = userActivity
     .concat(modelAppActivity)
     .concat(apptActivity)
-    .concat(modelBookingActivity);
+    .concat(modelBookingActivity)
+    .concat(apptRescheduleActivity)
+    .concat(modelRescheduleActivity);
 
   combined.sort(function(a, b) {
     return new Date(b.time) - new Date(a.time);
@@ -282,7 +314,7 @@ app.patch('/admin/appointments/:id', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
   const { status } = req.body;
-  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled', 'rescheduled'];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Invalid status.' });
@@ -293,24 +325,37 @@ app.patch('/admin/appointments/:id', async function(req, res) {
   res.json({ success: true });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
-});
-
-app.post('/setup-admin', function(req, res) {
-  const { email, key } = req.body;
-
-  if (key !== process.env.ADMIN_SETUP_KEY) {
-    return res.status(403).json({ error: 'Invalid key.' });
+app.patch('/appointments/:id/reschedule', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
   }
 
-  const result = db.prepare('UPDATE users SET is_admin = 1 WHERE email = ?').run(email);
-
-  if (result.changes === 0) {
-    return res.status(404).json({ error: 'No user found with that email.' });
+  const { date, time } = req.body;
+  if (!date || !time) {
+    return res.status(400).json({ error: 'Date and time are required.' });
   }
 
-  res.json({ success: true, message: email + ' is now an admin.' });
+  const apptResult = await pool.query('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+  const appointment = apptResult.rows[0];
+
+  if (!appointment) {
+    return res.status(404).json({ error: 'Appointment not found.' });
+  }
+
+  const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [userId]);
+  const isAdmin = userResult.rows[0] && userResult.rows[0].is_admin;
+
+  if (appointment.user_id !== userId && !isAdmin) {
+    return res.status(403).json({ error: 'You can only reschedule your own appointments.' });
+  }
+
+  await pool.query(
+    'UPDATE appointments SET appointment_date = $1, appointment_time = $2, status = $3, updated_at = NOW() WHERE id = $4',
+    [date, time, 'rescheduled', req.params.id]
+  );
+
+  res.json({ success: true });
 });
 
 app.post('/model-applications', async function(req, res) {
@@ -356,11 +401,99 @@ app.get('/admin/model-applications', async function(req, res) {
   res.json({ applications: result.rows });
 });
 
+app.patch('/admin/model-applications/:id', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const { status } = req.body;
+  const validStatuses = ['pending', 'accepted', 'rejected'];
+
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status.' });
+  }
+
+  await pool.query('UPDATE model_applications SET status = $1 WHERE id = $2', [status, req.params.id]);
+
+  res.json({ success: true });
+});
+
+app.get('/my-model-status', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  const result = await pool.query(
+    'SELECT status FROM model_applications WHERE user_id = $1',
+    [userId]
+  );
+
+  const application = result.rows[0];
+  res.json({ status: application ? application.status : 'none' });
+});
+
+app.post('/model-bookings', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'You must be logged in.' });
+  }
+
+  const statusResult = await pool.query(
+    'SELECT status FROM model_applications WHERE user_id = $1',
+    [userId]
+  );
+  const application = statusResult.rows[0];
+
+  if (!application || application.status !== 'accepted') {
+    return res.status(403).json({ error: 'Only approved models can book sessions.' });
+  }
+
+  const { date, time, notes } = req.body;
+
+  if (!date || !time) {
+    return res.status(400).json({ error: 'Date and time are required.' });
+  }
+
+  const result = await pool.query(
+    'INSERT INTO model_bookings (user_id, booking_date, booking_time, notes) VALUES ($1, $2, $3, $4) RETURNING id',
+    [userId, date, time, notes || '']
+  );
+
+  res.json({ success: true, bookingId: result.rows[0].id });
+});
+
+app.get('/my-model-bookings', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  const result = await pool.query(
+    'SELECT * FROM model_bookings WHERE user_id = $1 ORDER BY booking_date DESC',
+    [userId]
+  );
+
+  res.json({ bookings: result.rows });
+});
+
+app.get('/admin/model-bookings', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const result = await pool.query(`
+    SELECT model_bookings.*, users.name AS model_name, users.email AS model_email, model_applications.phone AS model_phone
+    FROM model_bookings
+    JOIN users ON model_bookings.user_id = users.id
+    LEFT JOIN model_applications ON model_applications.user_id = model_bookings.user_id
+    ORDER BY model_bookings.booking_date DESC
+  `);
+
+  res.json({ bookings: result.rows });
+});
+
 app.patch('/admin/model-bookings/:id', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
   const { status } = req.body;
-  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+  const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled', 'rescheduled'];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Invalid status.' });
@@ -391,6 +524,14 @@ function hoursForDay(weekday) {
   if (weekday === 0) return [];
   if (weekday === 6) return [12, 13, 14, 15, 16];
   return [10, 11, 12, 13, 14, 15, 16];
+}
+
+function parseTimeToHour(timeLabel) {
+  const match = timeLabel.match(/(\d+):00 (AM|PM)/);
+  let hour = parseInt(match[1], 10);
+  if (match[2] === 'PM' && hour !== 12) hour += 12;
+  if (match[2] === 'AM' && hour === 12) hour = 0;
+  return hour;
 }
 
 app.get('/availability', async function(req, res) {
@@ -444,59 +585,6 @@ app.get('/availability', async function(req, res) {
   res.json({ closed: false, slots: slots });
 });
 
-function parseTimeToHour(timeLabel) {
-  const match = timeLabel.match(/(\d+):00 (AM|PM)/);
-  let hour = parseInt(match[1], 10);
-  if (match[2] === 'PM' && hour !== 12) hour += 12;
-  if (match[2] === 'AM' && hour === 12) hour = 0;
-  return hour;
-}
-
-app.get('/my-model-status', async function(req, res) {
-  const userId = await getUserIdFromToken(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'Not logged in.' });
-  }
-
-  const result = await pool.query(
-    'SELECT status FROM model_applications WHERE user_id = $1',
-    [userId]
-  );
-
-  const application = result.rows[0];
-  res.json({ status: application ? application.status : 'none' });
-});
-
-app.post('/model-bookings', async function(req, res) {
-  const userId = await getUserIdFromToken(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'You must be logged in.' });
-  }
-
-  const statusResult = await pool.query(
-    'SELECT status FROM model_applications WHERE user_id = $1',
-    [userId]
-  );
-  const application = statusResult.rows[0];
-
-  if (!application || application.status !== 'accepted') {
-    return res.status(403).json({ error: 'Only approved models can book sessions.' });
-  }
-
-  const { date, time, notes } = req.body;
-
-  if (!date || !time) {
-    return res.status(400).json({ error: 'Date and time are required.' });
-  }
-
-  const result = await pool.query(
-    'INSERT INTO model_bookings (user_id, booking_date, booking_time, notes) VALUES ($1, $2, $3, $4) RETURNING id',
-    [userId, date, time, notes || '']
-  );
-
-  res.json({ success: true, bookingId: result.rows[0].id });
-});
-
 app.get('/admin/availability-overrides', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
@@ -535,84 +623,6 @@ app.delete('/admin/availability-overrides/:date', async function(req, res) {
   res.json({ success: true });
 });
 
-app.patch('/appointments/:id/reschedule', async function(req, res) {
-  // ...unchanged checks above...
-
-  await pool.query(
-    'UPDATE appointments SET appointment_date = $1, appointment_time = $2, status = $3, updated_at = NOW() WHERE id = $4',
-    [date, time, 'rescheduled', req.params.id]
-  );
-
-  res.json({ success: true });
+app.listen(PORT, () => {
+  console.log(`Server is running at http://localhost:${PORT}`);
 });
-
-app.get('/my-model-bookings', async function(req, res) {
-  const userId = await getUserIdFromToken(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'Not logged in.' });
-  }
-
-  const result = await pool.query(
-    'SELECT * FROM model_bookings WHERE user_id = $1 ORDER BY booking_date DESC',
-    [userId]
-  );
-
-  res.json({ bookings: result.rows });
-});
-
-app.get('/admin/model-bookings', async function(req, res) {
-  if (!(await requireAdmin(req, res))) return;
-
-  const result = await pool.query(`
-    SELECT model_bookings.*, users.name AS model_name, users.email AS model_email, model_applications.phone AS model_phone
-    FROM model_bookings
-    JOIN users ON model_bookings.user_id = users.id
-    LEFT JOIN model_applications ON model_applications.user_id = model_bookings.user_id
-    ORDER BY model_bookings.booking_date DESC
-  `);
-
-  res.json({ bookings: result.rows });
-});
-
-const apptRescheduleResult = await pool.query(`
-    SELECT users.name AS customer_name, appointments.updated_at
-    FROM appointments
-    JOIN users ON appointments.user_id = users.id
-    WHERE appointments.status = 'rescheduled'
-    ORDER BY appointments.updated_at DESC
-    LIMIT 5
-  `);
-  const apptRescheduleActivity = apptRescheduleResult.rows.map(function(appt) {
-    return {
-      message: appt.customer_name + ' rescheduled their appointment',
-      time: appt.updated_at
-    };
-  });
-
-  const modelRescheduleResult = await pool.query(`
-    SELECT users.name AS model_name, model_bookings.updated_at
-    FROM model_bookings
-    JOIN users ON model_bookings.user_id = users.id
-    WHERE model_bookings.status = 'rescheduled'
-    ORDER BY model_bookings.updated_at DESC
-    LIMIT 5
-  `);
-  const modelRescheduleActivity = modelRescheduleResult.rows.map(function(b) {
-    return {
-      message: b.model_name + ' rescheduled their modelling session',
-      time: b.updated_at
-    };
-  });
-
-  const combined = userActivity
-    .concat(modelAppActivity)
-    .concat(apptActivity)
-    .concat(modelBookingActivity)
-    .concat(apptRescheduleActivity)
-    .concat(modelRescheduleActivity);
-
-  combined.sort(function(a, b) {
-    return new Date(b.time) - new Date(a.time);
-  });
-
-  res.json({ activity: combined.slice(0, 8) });
