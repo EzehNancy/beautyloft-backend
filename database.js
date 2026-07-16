@@ -79,6 +79,16 @@ async function setupTables() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS model_availability (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      available_date TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(user_id, available_date)
+    )
+  `);
+
   await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP`);
   await pool.query(`ALTER TABLE model_bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP`);
   await pool.query('ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reschedule_reason TEXT');

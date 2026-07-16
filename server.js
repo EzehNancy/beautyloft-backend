@@ -626,3 +626,58 @@ app.delete('/admin/availability-overrides/:date', async function(req, res) {
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 });
+
+app.post('/model-availability', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  const statusResult = await pool.query('SELECT status FROM model_applications WHERE user_id = $1', [userId]);
+  const application = statusResult.rows[0];
+  if (!application || application.status !== 'accepted') {
+    return res.status(403).json({ error: 'Only approved models can set availability.' });
+  }
+
+  const { dates } = req.body;
+  if (!Array.isArray(dates) || dates.length === 0) {
+    return res.status(400).json({ error: 'At least one date is required.' });
+  }
+
+  for (const date of dates) {
+    await pool.query(
+      'INSERT INTO model_availability (user_id, available_date) VALUES ($1, $2) ON CONFLICT (user_id, available_date) DO NOTHING',
+      [userId, date]
+    );
+  }
+
+  res.json({ success: true });
+});
+
+app.get('/my-availability', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  const result = await pool.query(
+    'SELECT * FROM model_availability WHERE user_id = $1 ORDER BY available_date ASC',
+    [userId]
+  );
+
+  res.json({ availability: result.rows });
+});
+
+app.delete('/model-availability/:date', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  await pool.query(
+    'DELETE FROM model_availability WHERE user_id = $1 AND available_date = $2',
+    [userId, req.params.date]
+  );
+
+  res.json({ success: true });
+});
