@@ -79,12 +79,10 @@ async function setupTables() {
     )
   `);
 
-  await pool.query(`
-    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
-  `);
-  await pool.query(`
-    ALTER TABLE model_bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
-  `);
+  await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE model_bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP`);
+  await pool.query('ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reschedule_reason TEXT');
+  await pool.query('ALTER TABLE model_bookings ADD COLUMN IF NOT EXISTS reschedule_reason TEXT');
 }
 
 setupTables();

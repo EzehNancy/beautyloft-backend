@@ -331,7 +331,7 @@ app.patch('/appointments/:id/reschedule', async function(req, res) {
     return res.status(401).json({ error: 'Not logged in.' });
   }
 
-  const { date, time } = req.body;
+  const { date, time, reason } = req.body;
   if (!date || !time) {
     return res.status(400).json({ error: 'Date and time are required.' });
   }
@@ -351,8 +351,8 @@ app.patch('/appointments/:id/reschedule', async function(req, res) {
   }
 
   await pool.query(
-    'UPDATE appointments SET appointment_date = $1, appointment_time = $2, status = $3, updated_at = NOW() WHERE id = $4',
-    [date, time, 'rescheduled', req.params.id]
+    'UPDATE appointments SET appointment_date = $1, appointment_time = $2, status = $3, updated_at = NOW(), reschedule_reason = $4 WHERE id = $5',
+    [date, time, 'rescheduled', reason || '', req.params.id]
   );
 
   res.json({ success: true });
