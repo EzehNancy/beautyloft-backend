@@ -431,31 +431,23 @@ app.get('/my-model-status', async function(req, res) {
   res.json({ status: application ? application.status : 'none' });
 });
 
-app.post('/model-bookings', async function(req, res) {
-  const userId = await getUserIdFromToken(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'You must be logged in.' });
-  }
+app.post('/admin/model-bookings', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
 
-  const statusResult = await pool.query(
-    'SELECT status FROM model_applications WHERE user_id = $1',
-    [userId]
-  );
-  const application = statusResult.rows[0];
+  const { userId, date, time, notes } = req.body;
 
-  if (!application || application.status !== 'accepted') {
-    return res.status(403).json({ error: 'Only approved models can book sessions.' });
-  }
-
-  const { date, time, notes } = req.body;
-
-  if (!date || !time) {
-    return res.status(400).json({ error: 'Date and time are required.' });
+  if (!userId || !date || !time) {
+    return res.status(400).json({ error: 'Model, date, and time are required.' });
   }
 
   const result = await pool.query(
-    'INSERT INTO model_bookings (user_id, booking_date, booking_time, notes) VALUES ($1, $2, $3, $4) RETURNING id',
-    [userId, date, time, notes || '']
+    'INSERT INTO model_bookings (user_id, booking_date, booking_time, notes, status) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [userId, date, time, notes || '', 'confirmed']
+  );
+
+  await pool.query(
+    'DELETE FROM model_availability WHERE user_id = $1 AND available_date = $2',
+    [userId, date]
   );
 
   res.json({ success: true, bookingId: result.rows[0].id });
@@ -680,4 +672,17 @@ app.delete('/model-availability/:date', async function(req, res) {
   );
 
   res.json({ success: true });
+});
+
+app.get('/admin/model-availability', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const result = await pool.query(`
+    SELECT model_availability.*, users.name AS model_name, users.email AS model_email
+    FROM model_availability
+    JOIN users ON model_availability.user_id = users.id
+    ORDER BY available_date ASC
+  `);
+
+  res.json({ availability: result.rows });
 });
