@@ -686,3 +686,28 @@ app.get('/admin/model-availability', async function(req, res) {
 
   res.json({ availability: result.rows });
 });
+
+app.patch('/appointments/:id/cancel', async function(req, res) {
+  const userId = await getUserIdFromToken(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Not logged in.' });
+  }
+
+  const apptResult = await pool.query('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+  const appointment = apptResult.rows[0];
+
+  if (!appointment) {
+    return res.status(404).json({ error: 'Appointment not found.' });
+  }
+
+  const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [userId]);
+  const isAdmin = userResult.rows[0] && userResult.rows[0].is_admin;
+
+  if (appointment.user_id !== userId && !isAdmin) {
+    return res.status(403).json({ error: 'You can only cancel your own appointments.' });
+  }
+
+  await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', ['cancelled', req.params.id]);
+
+  res.json({ success: true });
+});
