@@ -89,6 +89,49 @@ async function setupTables() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      price INTEGER NOT NULL,
+      image_url TEXT,
+      category TEXT,
+      stock_quantity INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 1,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      order_ref TEXT UNIQUE,
+      total_amount INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending',
+      payment_status TEXT DEFAULT 'unpaid',
+      payment_reference TEXT,
+      shipping_address TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id SERIAL PRIMARY KEY,
+      order_id INTEGER NOT NULL REFERENCES orders(id),
+      product_id INTEGER REFERENCES products(id),
+      product_name TEXT NOT NULL,
+      price INTEGER NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      shape TEXT,
+      length TEXT,
+      color TEXT,
+      custom_notes TEXT
+    )
+  `);
+
   await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP`);
   await pool.query(`ALTER TABLE model_bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP`);
   await pool.query('ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reschedule_reason TEXT');

@@ -499,14 +499,14 @@ app.patch('/admin/model-bookings/:id', async function(req, res) {
 app.patch('/admin/model-bookings/:id/reschedule', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
-  const { date, time } = req.body;
+  const { date, time, reason } = req.body;
   if (!date || !time) {
     return res.status(400).json({ error: 'Date and time are required.' });
   }
 
   await pool.query(
-    'UPDATE model_bookings SET booking_date = $1, booking_time = $2, status = $3, updated_at = NOW() WHERE id = $4',
-    [date, time, 'rescheduled', req.params.id]
+    'UPDATE model_bookings SET booking_date = $1, booking_time = $2, status = $3, updated_at = NOW(), reschedule_reason = $4 WHERE id = $5',
+    [date, time, 'rescheduled', reason || '', req.params.id]
   );
 
   res.json({ success: true });
@@ -709,5 +709,52 @@ app.patch('/appointments/:id/cancel', async function(req, res) {
 
   await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', ['cancelled', req.params.id]);
 
+  res.json({ success: true });
+});
+
+app.get('/admin/products', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const result = await pool.query('SELECT * FROM products ORDER BY created_at DESC');
+  res.json({ products: result.rows });
+});
+
+app.post('/admin/products', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const { name, description, price, imageUrl, category, stockQuantity } = req.body;
+
+  if (!name || !price) {
+    return res.status(400).json({ error: 'Name and price are required.' });
+  }
+
+  const result = await pool.query(
+    `INSERT INTO products (name, description, price, image_url, category, stock_quantity)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [name, description || '', Math.round(price * 100), imageUrl || '', category || '', stockQuantity || 0]
+  );
+
+  res.json({ success: true, productId: result.rows[0].id });
+});
+
+app.patch('/admin/products/:id', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  const { name, description, price, imageUrl, category, stockQuantity, isActive } = req.body;
+
+  await pool.query(
+    `UPDATE products
+     SET name = $1, description = $2, price = $3, image_url = $4, category = $5, stock_quantity = $6, is_active = $7
+     WHERE id = $8`,
+    [name, description || '', Math.round(price * 100), imageUrl || '', category || '', stockQuantity || 0, isActive ? 1 : 0, req.params.id]
+  );
+
+  res.json({ success: true });
+});
+
+app.delete('/admin/products/:id', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  await pool.query('DELETE FROM products WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
