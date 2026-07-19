@@ -799,3 +799,10 @@ app.post('/admin/upload-image', upload.single('image'), async function(req, res)
     res.status(500).json({ error: 'Upload failed.' });
   }
 });
+
+app.get('/products', async function(req, res) {
+  const result = await pool.query(
+    'SELECT * FROM products WHERE is_active = 1 ORDER BY created_at DESC'
+  );
+  res.json({ products: result.rows });
+});
