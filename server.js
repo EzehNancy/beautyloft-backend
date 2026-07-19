@@ -157,12 +157,17 @@ app.get('/admin/stats', async function(req, res) {
   );
   const totalModels = parseInt(modelsCountResult.rows[0].count, 10);
 
+  const productsResult = await pool.query(
+    "SELECT COUNT(*) AS count FROM products WHERE is_active = 1"
+  );
+  const totalProducts = parseInt(productsResult.rows[0].count, 10);
+
   res.json({
     totalCustomers: totalCustomers,
     totalModels: totalModels,
     todaysAppointments: todaysAppointments,
     pendingOrders: 0,
-    totalProducts: 0,
+    totalProducts: totalProducts,
     pendingModelApplications: pendingModelApplications
   });
 });
