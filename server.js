@@ -9,6 +9,9 @@ const pool = require('./database.js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+
 const allowedOrigins = ['http://127.0.0.1:5500', 'https://beautyloft.vercel.app'];
 
 app.use(cors({
@@ -757,4 +760,37 @@ app.delete('/admin/products/:id', async function(req, res) {
 
   await pool.query('DELETE FROM products WHERE id = $1', [req.params.id]);
   res.json({ success: true });
+});
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post('/admin/upload-image', upload.single('image'), async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No image file provided.' });
+  }
+
+  try {
+    const uploadResult = await new Promise(function(resolve, reject) {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'beautyloft-products' },
+        function(error, result) {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    res.json({ success: true, imageUrl: uploadResult.secure_url });
+  } catch (err) {
+    res.status(500).json({ error: 'Upload failed.' });
+  }
 });
