@@ -806,3 +806,14 @@ app.get('/products', async function(req, res) {
   );
   res.json({ products: result.rows });
 });
+
+app.get('/products/:id', async function(req, res) {
+  const result = await pool.query('SELECT * FROM products WHERE id = $1 AND is_active = 1', [req.params.id]);
+  const product = result.rows[0];
+
+  if (!product) {
+    return res.status(404).json({ error: 'Product not found.' });
+  }
+
+  res.json({ product: product });
+});
