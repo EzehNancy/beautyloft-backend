@@ -62,27 +62,62 @@ app.post('/book', (req, res) => {
   res.json({ success: true, message: 'Booking received!' });
 });
 
-app.post('/signup', async function(req, res) {
-  const { name, email, password } = req.body;
+app.post('/signup', async function (req, res) {
+  try {
+    const { name, email, password } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'All fields are required.' });
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        error: 'All fields are required.'
+      });
+    }
+
+    // Normalize the email
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Check if the user already exists
+    const existingResult = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      [normalizedEmail]
+    );
+
+    if (existingResult.rows.length > 0) {
+      return res.status(409).json({
+        error: 'An account with that email already exists.'
+      });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create user
+    const insertResult = await pool.query(
+      `INSERT INTO users (name, email, password_hash)
+       VALUES ($1, $2, $3)
+       RETURNING id`,
+      [name.trim(), normalizedEmail, passwordHash]
+    );
+
+    return res.status(201).json({
+      success: true,
+      userId: insertResult.rows[0].id
+    });
+
+  } catch (error) {
+
+    // PostgreSQL duplicate/unique constraint error
+    if (error.code === '23505') {
+      return res.status(409).json({
+        error: 'An account with that email already exists.'
+      });
+    }
+
+    console.error('Signup error:', error);
+
+    return res.status(500).json({
+      error: 'Something went wrong while creating your account.'
+    });
   }
-
-  const existingResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-  const existing = existingResult.rows[0];
-  if (existing) {
-    return res.status(409).json({ error: 'An account with that email already exists.' });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  const insertResult = await pool.query(
-    'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id',
-    [name, email, passwordHash]
-  );
-
-  res.json({ success: true, userId: insertResult.rows[0].id });
 });
 
 app.post('/login', async function(req, res) {
