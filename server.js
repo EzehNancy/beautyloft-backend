@@ -767,15 +767,17 @@ app.post('/admin/products', async function(req, res) {
 
   try {
     const {
-      name,
-      collection,
-      description,
-      price,
-      imageUrl,
-      images,
-      category,
-      stockQuantity
-    } = req.body;
+  name,
+  collection,
+  displaySize,
+  displayShape,
+  description,
+  price,
+  imageUrl,
+  images,
+  category,
+  stockQuantity
+} = req.body;
 
     if (!name || !price) {
       return res.status(400).json({
@@ -784,31 +786,35 @@ app.post('/admin/products', async function(req, res) {
     }
 
     const result = await pool.query(
-      `INSERT INTO products
-        (
-          name,
-          collection,
-          description,
-          price,
-          image_url,
-          images,
-          category,
-          stock_quantity
-        )
-       VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id`,
-      [
-        name,
-        collection || '',
-        description || '',
-        Math.round(price * 100),
-        imageUrl || '',
-        JSON.stringify(images || []),
-        category || '',
-        stockQuantity || 0
-      ]
-    );
+  `INSERT INTO products
+    (
+      name,
+      collection,
+      display_size,
+      display_shape,
+      description,
+      price,
+      image_url,
+      images,
+      category,
+      stock_quantity
+    )
+   VALUES
+    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+   RETURNING id`,
+  [
+    name,
+    collection || '',
+    displaySize || '',
+    displayShape || '',
+    description || '',
+    Math.round(price * 100),
+    imageUrl || '',
+    JSON.stringify(images || []),
+    category || '',
+    stockQuantity || 0
+  ]
+);
 
     res.json({
       success: true,
@@ -831,6 +837,8 @@ app.patch('/admin/products/:id', async function(req, res) {
     const {
       name,
       collection,
+      displaySize,
+      displayShape,
       description,
       price,
       imageUrl,
@@ -841,31 +849,35 @@ app.patch('/admin/products/:id', async function(req, res) {
     } = req.body;
 
     await pool.query(
-      `UPDATE products
-       SET
-         name = $1,
-         collection = $2,
-         description = $3,
-         price = $4,
-         image_url = $5,
-         images = $6,
-         category = $7,
-         stock_quantity = $8,
-         is_active = $9
-       WHERE id = $10`,
-      [
-        name,
-        collection || '',
-        description || '',
-        Math.round(price * 100),
-        imageUrl || '',
-        JSON.stringify(images || []),
-        category || '',
-        stockQuantity || 0,
-        isActive ? 1 : 0,
-        req.params.id
-      ]
-    );
+  `UPDATE products
+   SET
+     name = $1,
+     collection = $2,
+     display_size = $3,
+     display_shape = $4,
+     description = $5,
+     price = $6,
+     image_url = $7,
+     images = $8,
+     category = $9,
+     stock_quantity = $10,
+     is_active = $11
+   WHERE id = $12`,
+  [
+    name,
+    collection || '',
+    displaySize || '',
+    displayShape || '',
+    description || '',
+    Math.round(price * 100),
+    imageUrl || '',
+    JSON.stringify(images || []),
+    category || '',
+    stockQuantity || 0,
+    isActive ? 1 : 0,
+    req.params.id
+  ]
+);
 
     res.json({
       success: true
