@@ -837,7 +837,7 @@ app.patch('/admin/products/:id', async function(req, res) {
         imageUrl || '',
         category || '',
         stockQuantity || 0,
-        !!isActive,
+        isActive ? 1 : 0,
         req.params.id
       ]
     );
