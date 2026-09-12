@@ -96,7 +96,7 @@ async function setupTables() {
       description TEXT,
       price INTEGER NOT NULL,
       image_url TEXT,
-      images JSONB DEFAULT '[]'
+      images JSONB DEFAULT '[]',
       category TEXT,
       stock_quantity INTEGER DEFAULT 0,
       is_active INTEGER DEFAULT 1,
