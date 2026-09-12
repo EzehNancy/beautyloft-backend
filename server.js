@@ -765,41 +765,63 @@ app.get('/admin/products', async function(req, res) {
 app.post('/admin/products', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
-  const {
-    name,
-    collection,
-    description,
-    price,
-    imageUrl,
-    category,
-    stockQuantity
-  } = req.body;
-
-  if (!name || !price) {
-    return res.status(400).json({ error: 'Name and price are required.' });
-  }
-
-  const result = await pool.query(
-    `INSERT INTO products
-      (name, collection, description, price, image_url, category, stock_quantity)
-     VALUES
-      ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id`,
-    [
+  try {
+    const {
       name,
-      collection || '',
-      description || '',
-      Math.round(price * 100),
-      imageUrl || '',
-      category || '',
-      stockQuantity || 0
-    ]
-  );
+      collection,
+      description,
+      price,
+      imageUrl,
+      images,
+      category,
+      stockQuantity
+    } = req.body;
 
-  res.json({
-    success: true,
-    productId: result.rows[0].id
-  });
+    if (!name || !price) {
+      return res.status(400).json({
+        error: 'Name and price are required.'
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO products
+        (
+          name,
+          collection,
+          description,
+          price,
+          image_url,
+          images,
+          category,
+          stock_quantity
+        )
+       VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [
+        name,
+        collection || '',
+        description || '',
+        Math.round(price * 100),
+        imageUrl || '',
+        JSON.stringify(images || []),
+        category || '',
+        stockQuantity || 0
+      ]
+    );
+
+    res.json({
+      success: true,
+      productId: result.rows[0].id
+    });
+
+  } catch (error) {
+    console.error('ADD PRODUCT ERROR:', error);
+
+    res.status(500).json({
+      error: 'Failed to add product.'
+    });
+  }
 });
 
 app.patch('/admin/products/:id', async function(req, res) {
@@ -812,6 +834,7 @@ app.patch('/admin/products/:id', async function(req, res) {
       description,
       price,
       imageUrl,
+      images,
       category,
       stockQuantity,
       isActive
@@ -825,16 +848,18 @@ app.patch('/admin/products/:id', async function(req, res) {
          description = $3,
          price = $4,
          image_url = $5,
-         category = $6,
-         stock_quantity = $7,
-         is_active = $8
-       WHERE id = $9`,
+         images = $6,
+         category = $7,
+         stock_quantity = $8,
+         is_active = $9
+       WHERE id = $10`,
       [
         name,
         collection || '',
         description || '',
         Math.round(price * 100),
         imageUrl || '',
+        JSON.stringify(images || []),
         category || '',
         stockQuantity || 0,
         isActive ? 1 : 0,
@@ -842,7 +867,9 @@ app.patch('/admin/products/:id', async function(req, res) {
       ]
     );
 
-    res.json({ success: true });
+    res.json({
+      success: true
+    });
 
   } catch (error) {
     console.error('UPDATE PRODUCT ERROR:', error);
