@@ -805,43 +805,52 @@ app.post('/admin/products', async function(req, res) {
 app.patch('/admin/products/:id', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
-  const {
-    name,
-    collection,
-    description,
-    price,
-    imageUrl,
-    category,
-    stockQuantity,
-    isActive
-  } = req.body;
-
-  await pool.query(
-    `UPDATE products
-     SET
-       name = $1,
-       collection = $2,
-       description = $3,
-       price = $4,
-       image_url = $5,
-       category = $6,
-       stock_quantity = $7,
-       is_active = $8
-     WHERE id = $9`,
-    [
+  try {
+    const {
       name,
-      collection || '',
-      description || '',
-      Math.round(price * 100),
-      imageUrl || '',
-      category || '',
-      stockQuantity || 0,
-      isActive,
-      req.params.id
-    ]
-  );
+      collection,
+      description,
+      price,
+      imageUrl,
+      category,
+      stockQuantity,
+      isActive
+    } = req.body;
 
-  res.json({ success: true });
+    await pool.query(
+      `UPDATE products
+       SET
+         name = $1,
+         collection = $2,
+         description = $3,
+         price = $4,
+         image_url = $5,
+         category = $6,
+         stock_quantity = $7,
+         is_active = $8
+       WHERE id = $9`,
+      [
+        name,
+        collection || '',
+        description || '',
+        Math.round(price * 100),
+        imageUrl || '',
+        category || '',
+        stockQuantity || 0,
+        !!isActive,
+        req.params.id
+      ]
+    );
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('UPDATE PRODUCT ERROR:', error);
+
+    res.status(500).json({
+      error: 'Failed to update product.'
+    });
+  }
 });
 
 app.delete('/admin/products/:id', async function(req, res) {
