@@ -765,31 +765,80 @@ app.get('/admin/products', async function(req, res) {
 app.post('/admin/products', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
-  const { name, description, price, imageUrl, category, stockQuantity } = req.body;
+  const {
+    name,
+    collection,
+    description,
+    price,
+    imageUrl,
+    category,
+    stockQuantity
+  } = req.body;
 
   if (!name || !price) {
     return res.status(400).json({ error: 'Name and price are required.' });
   }
 
   const result = await pool.query(
-    `INSERT INTO products (name, description, price, image_url, category, stock_quantity)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [name, description || '', Math.round(price * 100), imageUrl || '', category || '', stockQuantity || 0]
+    `INSERT INTO products
+      (name, collection, description, price, image_url, category, stock_quantity)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id`,
+    [
+      name,
+      collection || '',
+      description || '',
+      Math.round(price * 100),
+      imageUrl || '',
+      category || '',
+      stockQuantity || 0
+    ]
   );
 
-  res.json({ success: true, productId: result.rows[0].id });
+  res.json({
+    success: true,
+    productId: result.rows[0].id
+  });
 });
 
 app.patch('/admin/products/:id', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
-  const { name, description, price, imageUrl, category, stockQuantity, isActive } = req.body;
+  const {
+    name,
+    collection,
+    description,
+    price,
+    imageUrl,
+    category,
+    stockQuantity,
+    isActive
+  } = req.body;
 
   await pool.query(
     `UPDATE products
-     SET name = $1, description = $2, price = $3, image_url = $4, category = $5, stock_quantity = $6, is_active = $7
-     WHERE id = $8`,
-    [name, description || '', Math.round(price * 100), imageUrl || '', category || '', stockQuantity || 0, isActive ? 1 : 0, req.params.id]
+     SET
+       name = $1,
+       collection = $2,
+       description = $3,
+       price = $4,
+       image_url = $5,
+       category = $6,
+       stock_quantity = $7,
+       is_active = $8
+     WHERE id = $9`,
+    [
+      name,
+      collection || '',
+      description || '',
+      Math.round(price * 100),
+      imageUrl || '',
+      category || '',
+      stockQuantity || 0,
+      isActive,
+      req.params.id
+    ]
   );
 
   res.json({ success: true });
