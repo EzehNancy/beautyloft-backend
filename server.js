@@ -769,13 +769,13 @@ app.post('/admin/products', async function(req, res) {
     const {
   name,
   collection,
+  categories,
   displaySize,
   displayShape,
   description,
   price,
   imageUrl,
   images,
-  category,
   stockQuantity
 } = req.body;
 
@@ -790,13 +790,13 @@ app.post('/admin/products', async function(req, res) {
     (
       name,
       collection,
+      categories,
       display_size,
       display_shape,
       description,
       price,
       image_url,
       images,
-      category,
       stock_quantity
     )
    VALUES
@@ -805,6 +805,7 @@ app.post('/admin/products', async function(req, res) {
   [
     name,
     collection || '',
+    JSON.stringify(categories || []),
     displaySize || '',
     displayShape || '',
     description || '',
@@ -837,42 +838,42 @@ app.patch('/admin/products/:id', async function(req, res) {
     const {
       name,
       collection,
+      categories,
       displaySize,
       displayShape,
       description,
       price,
       imageUrl,
       images,
-      category,
       stockQuantity,
       isActive
     } = req.body;
 
-    await pool.query(
+await pool.query(
   `UPDATE products
    SET
      name = $1,
      collection = $2,
-     display_size = $3,
-     display_shape = $4,
-     description = $5,
-     price = $6,
-     image_url = $7,
-     images = $8,
-     category = $9,
+     categories = $3,
+     display_size = $4,
+     display_shape = $5,
+     description = $6,
+     price = $7,
+     image_url = $8,
+     images = $9,
      stock_quantity = $10,
      is_active = $11
    WHERE id = $12`,
   [
     name,
     collection || '',
+    JSON.stringify(categories || []),
     displaySize || '',
     displayShape || '',
     description || '',
     Math.round(price * 100),
     imageUrl || '',
     JSON.stringify(images || []),
-    category || '',
     stockQuantity || 0,
     isActive ? 1 : 0,
     req.params.id
