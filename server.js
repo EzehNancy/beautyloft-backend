@@ -812,7 +812,6 @@ app.post('/admin/products', async function(req, res) {
     Math.round(price * 100),
     imageUrl || '',
     JSON.stringify(images || []),
-    category || '',
     stockQuantity || 0
   ]
 );
@@ -899,6 +898,102 @@ app.delete('/admin/products/:id', async function(req, res) {
   await pool.query('DELETE FROM products WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
+
+// ================================
+// COLLECTION ROUTES
+// ================================
+
+// Get all collections
+app.get('/admin/collections', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  try {
+    const result = await pool.query(
+      `SELECT *
+       FROM collections
+       ORDER BY name ASC`
+    );
+
+    res.json({
+      collections: result.rows
+    });
+
+  } catch (error) {
+    console.error('GET COLLECTIONS ERROR:', error);
+
+    res.status(500).json({
+      error: 'Failed to load collections.'
+    });
+  }
+});
+
+
+// Add a collection
+app.post('/admin/collections', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  try {
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        error: 'Collection name is required.'
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO collections (name)
+       VALUES ($1)
+       RETURNING *`,
+      [name.trim()]
+    );
+
+    res.json({
+      success: true,
+      collection: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('ADD COLLECTION ERROR:', error);
+
+    if (error.code === '23505') {
+      return res.status(400).json({
+        error: 'That collection already exists.'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Failed to add collection.'
+    });
+  }
+});
+
+
+// Delete a collection
+app.delete('/admin/collections/:id', async function(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
+  try {
+    await pool.query(
+      `DELETE FROM collections
+       WHERE id = $1`,
+      [req.params.id]
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+    console.error('DELETE COLLECTION ERROR:', error);
+
+    res.status(500).json({
+      error: 'Failed to delete collection.'
+    });
+  }
+});
+
+
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
