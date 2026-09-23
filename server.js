@@ -1045,3 +1045,852 @@ app.get('/products/:id', async function(req, res) {
 
   res.json({ product: product });
 });
+
+function getSizePrice(size) {
+
+  if (size === 'L') {
+    return 1500 * 100;
+  }
+
+  if (size === 'XL') {
+    return 2000 * 100;
+  }
+
+  if (size === 'XXL') {
+    return 2500 * 100;
+  }
+
+  return 0;
+}
+
+
+function getNailTypePrice(nailType) {
+
+  if (nailType === 'Builder Gel') {
+    return 1000 * 100;
+  }
+
+  if (nailType === 'Polygel') {
+    return 1500 * 100;
+  }
+
+  if (nailType === 'Acrylic') {
+    return 2500 * 100;
+  }
+
+  return 0;
+}
+
+const LAGOS_DELIVERY_PRICES = {
+
+  // Zone 1 — ₦2,500
+  'Ikeja': 2500 * 100,
+  'Allen Avenue': 2500 * 100,
+  'Opebi': 2500 * 100,
+  'Alausa': 2500 * 100,
+  'Maryland': 2500 * 100,
+  'Anthony': 2500 * 100,
+  'Ogba': 2500 * 100,
+  'Ojodu': 2500 * 100,
+  'Berger': 2500 * 100,
+  'Omole': 2500 * 100,
+  'Magodo': 2500 * 100,
+  'GRA Ikeja': 2500 * 100,
+  'Computer Village': 2500 * 100,
+
+  // Zone 2 — ₦3,000
+  'Yaba': 3000 * 100,
+  'Sabo Yaba': 3000 * 100,
+  'Akoka': 3000 * 100,
+  'Onike': 3000 * 100,
+  'Surulere': 3000 * 100,
+  'Aguda': 3000 * 100,
+  'Ijesha': 3000 * 100,
+  'Mushin': 3000 * 100,
+  'Palmgrove': 3000 * 100,
+  'Onipanu': 3000 * 100,
+  'Shomolu': 3000 * 100,
+  'Bariga': 3000 * 100,
+  'Gbagada': 3000 * 100,
+  'Ifako-Gbagada': 3000 * 100,
+  'Pedro': 3000 * 100,
+  'Fadeyi': 3000 * 100,
+  'Jibowu': 3000 * 100,
+  'Ebute Metta': 3000 * 100,
+
+  // Zone 3 — ₦3,000
+  'Ketu': 3000 * 100,
+  'Mile 12': 3000 * 100,
+  'Ojota': 3000 * 100,
+  'Kosofe': 3000 * 100,
+  'Ikosi': 3000 * 100,
+  'Alapere': 3000 * 100,
+  'Ogudu': 3000 * 100,
+  'Oworonshoki': 3000 * 100,
+  'Ifako-Ijaiye': 3000 * 100,
+  'Agege': 3000 * 100,
+  'Dopemu': 3000 * 100,
+  'Iju': 3000 * 100,
+  'Fagba': 3000 * 100,
+  'Abule Egba': 3000 * 100,
+
+  // Zone 4 — ₦4,000
+  'Victoria Island': 4000 * 100,
+  'Oniru': 4000 * 100,
+  'Ikoyi': 4000 * 100,
+  'Banana Island': 4000 * 100,
+
+  // Zone 5 — ₦4,000
+  'Lekki Phase 1': 4000 * 100,
+  'Ikate': 4000 * 100,
+  'Osapa London': 4000 * 100,
+  'Agungi': 4000 * 100,
+  'Chevron': 4000 * 100,
+  'Igbo Efon': 4000 * 100,
+  'Jakande': 4000 * 100,
+  'Chisco': 4000 * 100,
+  'VGC': 4000 * 100,
+
+  // Zone 6 — ₦4,500
+  'Ajah': 4500 * 100,
+  'Abraham Adesanya': 4500 * 100,
+  'Sangotedo': 4500 * 100,
+  'Badore': 4500 * 100,
+  'Addo': 4500 * 100,
+  'Langbasa': 4500 * 100,
+  'Thomas Estate': 4500 * 100,
+  'Ogombo': 4500 * 100,
+
+  // Zone 7 — ₦3,500
+  'Lagos Island': 3500 * 100,
+  'Marina': 3500 * 100,
+  'CMS': 3500 * 100,
+  'Obalende': 3500 * 100,
+  'Adeniji Adele': 3500 * 100,
+
+  // Zone 8 — ₦4,000
+  'Apapa': 4000 * 100,
+  'GRA Apapa': 4000 * 100,
+  'Ajegunle': 4000 * 100,
+  'Ijora': 4000 * 100,
+  'Orile': 4000 * 100,
+  'Amukoko': 4000 * 100,
+
+  // Zone 9 — ₦4,000
+  'Festac': 4000 * 100,
+  'Amuwo Odofin': 4000 * 100,
+  'Satellite Town': 4000 * 100,
+  'Mile 2': 4000 * 100,
+  'Apple Junction': 4000 * 100,
+  'Ago Palace': 4000 * 100,
+  'Okota': 4000 * 100,
+  'Isolo': 4000 * 100,
+  'Oshodi': 4000 * 100,
+  'Ajao Estate': 4000 * 100,
+
+  // Zone 10 — ₦3,500
+  'Egbeda': 3500 * 100,
+  'Idimu': 3500 * 100,
+  'Ikotun': 3500 * 100,
+  'Igando': 3500 * 100,
+  'Iyana Ipaja': 3500 * 100,
+  'Ayobo': 3500 * 100,
+  'Ipaja': 3500 * 100,
+  'Akowonjo': 3500 * 100,
+  'Gowon Estate': 3500 * 100,
+  'Command': 3500 * 100,
+  'Abesan Estate': 3500 * 100,
+
+  // Zone 11 — ₦5,000
+  'Ikorodu': 5000 * 100,
+  'Agric Ikorodu': 5000 * 100,
+  'Igbogbo': 5000 * 100,
+  'Ebute Ikorodu': 5000 * 100,
+  'Owode': 5000 * 100,
+  'Bayeku': 5000 * 100,
+
+  // Zone 12 — ₦5,500
+  'Badagry': 5500 * 100,
+  'Ojo': 5500 * 100,
+  'Alaba': 5500 * 100,
+  'Okokomaiko': 5500 * 100,
+  'Ijanikin': 5500 * 100,
+  'Trade Fair': 5500 * 100,
+  'Volkswagen': 5500 * 100,
+
+  // Zone 13 — ₦5,500
+  'Ibeju-Lekki': 5500 * 100,
+  'Lakowe': 5500 * 100,
+  'Awoyaya': 5500 * 100,
+  'Abijo': 5500 * 100,
+  'Bogije': 5500 * 100,
+  'Eleko': 5500 * 100,
+  'Epe': 5500 * 100
+
+};
+
+
+function getLagosDeliveryFee(area) {
+
+  if (!area) {
+    return null;
+  }
+
+  return LAGOS_DELIVERY_PRICES[area] ?? null;
+
+}
+
+app.post(
+  '/checkout/create-order',
+  async function(req, res) {
+
+    const client =
+      await pool.connect();
+
+
+    try {
+
+      const {
+        cart,
+        measurements,
+        saveMeasurements,
+        delivery
+      } = req.body;
+
+
+      if (
+        !Array.isArray(cart) ||
+        cart.length === 0
+      ) {
+
+        return res.status(400).json({
+          error: 'Your cart is empty.'
+        });
+
+      }
+
+
+      if (
+        !delivery ||
+        !delivery.firstName ||
+        !delivery.lastName ||
+        !delivery.email ||
+        !delivery.phone ||
+        !delivery.address ||
+        !delivery.city ||
+        !delivery.state
+      ) {
+
+        return res.status(400).json({
+          error:
+            'Delivery information is incomplete.'
+        });
+
+      }
+
+
+      await client.query('BEGIN');
+
+
+      const verifiedItems = [];
+
+      let subtotal = 0;
+
+
+      for (const item of cart) {
+
+        const quantity =
+          Number(item.quantity);
+
+
+        if (
+          !Number.isInteger(quantity) ||
+          quantity < 1 ||
+          quantity > 3
+        ) {
+
+          throw new Error(
+            'Invalid product quantity.'
+          );
+
+        }
+
+
+        const productResult =
+          await client.query(
+            `
+              SELECT
+                id,
+                name,
+                price,
+                image_url,
+                stock_quantity,
+                is_active
+              FROM products
+              WHERE id = $1
+              LIMIT 1
+            `,
+            [item.productId]
+          );
+
+
+        if (
+          productResult.rows.length === 0
+        ) {
+
+          throw new Error(
+            'A product in your cart no longer exists.'
+          );
+
+        }
+
+
+        const product =
+          productResult.rows[0];
+
+
+        if (
+          Number(product.is_active) !== 1
+        ) {
+
+          throw new Error(
+            product.name +
+            ' is currently unavailable.'
+          );
+
+        }
+
+
+        if (
+          Number(product.stock_quantity) <
+          quantity
+        ) {
+
+          throw new Error(
+            'Not enough stock for ' +
+            product.name +
+            '.'
+          );
+
+        }
+
+
+        const unitPrice =
+          Number(product.price) +
+          getSizePrice(item.size) +
+          getNailTypePrice(
+            item.nailType
+          );
+
+
+        subtotal +=
+          unitPrice * quantity;
+
+
+        verifiedItems.push({
+
+          productId:
+            product.id,
+
+          name:
+            product.name,
+
+          unitPrice:
+            unitPrice,
+
+          quantity:
+            quantity,
+
+          image:
+            product.image_url,
+
+          size:
+            item.size || null,
+
+          nailType:
+            item.nailType || null,
+
+          shape:
+            item.shape || null,
+
+          finish:
+            item.finish || null,
+
+          length:
+            item.length || null
+
+        });
+
+      }
+
+
+      /*
+       * DELIVERY:
+       *
+       * Keep this at zero until we define
+       * BeautyLoft's actual delivery pricing.
+       */
+
+      const deliveryArea =
+  delivery.area;
+
+const deliveryFee =
+  getLagosDeliveryFee(deliveryArea);
+
+if (deliveryFee === null) {
+
+  await client.query('ROLLBACK');
+
+  return res.status(400).json({
+    success: false,
+    message:
+      'Please select a valid Lagos delivery area.'
+  });
+
+}
+
+const total =
+  subtotal + deliveryFee;
+
+
+      const orderRef =
+        'BL-' +
+        Date.now().toString(36).toUpperCase() +
+        '-' +
+        Math.random()
+          .toString(36)
+          .slice(2, 7)
+          .toUpperCase();
+
+
+      /*
+       * Your existing auth system uses
+       * req.session.userId.
+       */
+
+      const userId =
+        req.session &&
+        req.session.userId
+          ? req.session.userId
+          : null;
+
+
+const orderResult =
+  await client.query(
+    `
+      INSERT INTO orders (
+
+        user_id,
+        order_ref,
+
+        first_name,
+        last_name,
+
+        email,
+        phone,
+
+        delivery_address,
+        city,
+        state,
+        delivery_area,
+
+        delivery_instructions,
+
+        subtotal,
+        delivery_fee,
+        total,
+
+        payment_status,
+        order_status
+
+      )
+
+      VALUES (
+        $1, $2,
+        $3, $4,
+        $5, $6,
+        $7, $8, $9, $10,
+        $11,
+        $12, $13, $14,
+        'pending',
+        'pending'
+      )
+
+      RETURNING
+        id,
+        order_ref,
+        subtotal,
+        delivery_fee,
+        total,
+        payment_status,
+        order_status
+    `,
+    [
+      userId,
+      orderRef,
+
+      delivery.firstName,
+      delivery.lastName,
+
+      delivery.email,
+      delivery.phone,
+
+      delivery.address,
+      delivery.city,
+      delivery.state,
+      deliveryArea,
+
+      delivery.instructions || null,
+
+      subtotal,
+      deliveryFee,
+      total
+    ]
+  );
+
+
+      const order =
+        orderResult.rows[0];
+
+
+      for (
+        const item of verifiedItems
+      ) {
+
+        await client.query(
+          `
+            INSERT INTO order_items (
+
+              order_id,
+              product_id,
+              product_name,
+
+              unit_price,
+              quantity,
+
+              size,
+              nail_type,
+              shape,
+              finish,
+              length,
+
+              image_url
+
+            )
+
+            VALUES (
+              $1, $2, $3,
+              $4, $5,
+              $6, $7, $8, $9, $10,
+              $11
+            )
+          `,
+          [
+            order.id,
+            item.productId,
+            item.name,
+
+            item.unitPrice,
+            item.quantity,
+
+            item.size,
+            item.nailType,
+            item.shape,
+            item.finish,
+            item.length,
+
+            item.image
+          ]
+        );
+
+      }
+
+
+      if (measurements) {
+
+        await client.query(
+          `
+            INSERT INTO order_measurements (
+
+              order_id,
+
+              left_thumb,
+              left_index,
+              left_middle,
+              left_ring,
+              left_pinky,
+
+              right_thumb,
+              right_index,
+              right_middle,
+              right_ring,
+              right_pinky
+
+            )
+
+            VALUES (
+              $1,
+              $2, $3, $4, $5, $6,
+              $7, $8, $9, $10, $11
+            )
+          `,
+          [
+            order.id,
+
+            measurements.leftThumb,
+            measurements.leftIndex,
+            measurements.leftMiddle,
+            measurements.leftRing,
+            measurements.leftPinky,
+
+            measurements.rightThumb,
+            measurements.rightIndex,
+            measurements.rightMiddle,
+            measurements.rightRing,
+            measurements.rightPinky
+          ]
+        );
+
+      }
+
+
+      /*
+       * Save measurements only when:
+       *
+       * 1. customer selected the option
+       * 2. customer is logged in
+       */
+
+      if (
+        saveMeasurements &&
+        userId &&
+        measurements
+      ) {
+
+        await client.query(
+          `
+            INSERT INTO saved_measurements (
+
+              user_id,
+
+              left_thumb,
+              left_index,
+              left_middle,
+              left_ring,
+              left_pinky,
+
+              right_thumb,
+              right_index,
+              right_middle,
+              right_ring,
+              right_pinky
+
+            )
+
+            VALUES (
+              $1,
+              $2, $3, $4, $5, $6,
+              $7, $8, $9, $10, $11
+            )
+
+            ON CONFLICT (user_id)
+
+            DO UPDATE SET
+
+              left_thumb =
+                EXCLUDED.left_thumb,
+
+              left_index =
+                EXCLUDED.left_index,
+
+              left_middle =
+                EXCLUDED.left_middle,
+
+              left_ring =
+                EXCLUDED.left_ring,
+
+              left_pinky =
+                EXCLUDED.left_pinky,
+
+              right_thumb =
+                EXCLUDED.right_thumb,
+
+              right_index =
+                EXCLUDED.right_index,
+
+              right_middle =
+                EXCLUDED.right_middle,
+
+              right_ring =
+                EXCLUDED.right_ring,
+
+              right_pinky =
+                EXCLUDED.right_pinky,
+
+              updated_at =
+                CURRENT_TIMESTAMP
+          `,
+          [
+            userId,
+
+            measurements.leftThumb,
+            measurements.leftIndex,
+            measurements.leftMiddle,
+            measurements.leftRing,
+            measurements.leftPinky,
+
+            measurements.rightThumb,
+            measurements.rightIndex,
+            measurements.rightMiddle,
+            measurements.rightRing,
+            measurements.rightPinky
+          ]
+        );
+
+      }
+
+
+      await client.query('COMMIT');
+
+
+      return res.status(201).json({
+
+        success: true,
+
+        order: {
+          id: order.id,
+          reference: order.order_ref,
+          subtotal: order.subtotal,
+          deliveryFee:
+            order.delivery_fee,
+          total: order.total,
+          paymentStatus:
+            order.payment_status
+        }
+
+      });
+
+
+    } catch (error) {
+
+      await client.query('ROLLBACK');
+
+      console.error(
+        'Checkout error:',
+        error
+      );
+
+
+      return res.status(500).json({
+
+        error:
+          error.message ||
+          'Checkout failed.'
+
+      });
+
+
+    } finally {
+
+      client.release();
+
+    }
+
+  }
+);
+
+app.get(
+  '/checkout/saved-measurements',
+  async function(req, res) {
+
+    try {
+
+      if (
+        !req.session ||
+        !req.session.userId
+      ) {
+
+        return res.json({
+          measurements: null
+        });
+
+      }
+
+
+      const result =
+        await pool.query(
+          `
+            SELECT *
+            FROM saved_measurements
+            WHERE user_id = $1
+            LIMIT 1
+          `,
+          [req.session.userId]
+        );
+
+
+      if (!result.rows.length) {
+
+        return res.json({
+          measurements: null
+        });
+
+      }
+
+
+      const row =
+        result.rows[0];
+
+
+      return res.json({
+
+        measurements: {
+
+          leftThumb:
+            row.left_thumb,
+
+          leftIndex:
+            row.left_index,
+
+          leftMiddle:
+            row.left_middle,
+
+          leftRing:
+            row.left_ring,
+
+          leftPinky:
+            row.left_pinky,
+
+          rightThumb:
+            row.right_thumb,
+
+          rightIndex:
+            row.right_index,
+
+          rightMiddle:
+            row.right_middle,
+
+          rightRing:
+            row.right_ring,
+
+          rightPinky:
+            row.right_pinky
+
+        }
+
+      });
+
+
+    } catch (error) {
+
+      console.error(error);
+
+      return res.status(500).json({
+        error:
+          'Unable to load measurements.'
+      });
+
+    }
+
+  }
+);
