@@ -2184,20 +2184,31 @@ const orderResult =
 
       return res.status(201).json({
 
-        success: true,
+  success: true,
 
-        order: {
-          id: order.id,
-          reference: order.order_ref,
-          subtotal: order.subtotal,
-          deliveryFee:
-            order.delivery_fee,
-          total: order.total,
-          paymentStatus:
-            order.payment_status
-        }
+  order: {
+    id: order.id,
 
-      });
+    order_ref:
+      order.order_ref,
+
+    subtotal:
+      order.subtotal,
+
+    deliveryFee:
+      order.delivery_fee,
+
+    total:
+      order.total,
+
+    paymentStatus:
+      order.payment_status,
+
+    orderStatus:
+      order.order_status
+  }
+
+});
 
 
     } catch (error) {
@@ -2545,6 +2556,283 @@ app.patch(
         error:
           'Unable to submit bank transfer for verification.'
       });
+
+    }
+
+  }
+);
+
+app.patch(
+  '/admin/orders/:id/confirm-bank-transfer',
+  async function(req, res) {
+
+    if (!(await requireAdmin(req, res))) {
+      return;
+    }
+
+
+    const orderId =
+      Number(req.params.id);
+
+
+    if (!orderId) {
+
+      return res.status(400).json({
+        error: 'Invalid order ID.'
+      });
+
+    }
+
+
+    const client =
+      await pool.connect();
+
+
+    try {
+
+      await client.query('BEGIN');
+
+
+      /*
+       * Lock the order so two confirmation
+       * requests cannot process it together.
+       */
+
+      const orderResult =
+        await client.query(
+          `
+            SELECT
+              id,
+              order_ref,
+              payment_method,
+              payment_status,
+              order_status
+
+            FROM orders
+
+            WHERE id = $1
+
+            FOR UPDATE
+          `,
+          [orderId]
+        );
+
+
+      if (
+        orderResult.rows.length === 0
+      ) {
+
+        await client.query('ROLLBACK');
+
+        return res.status(404).json({
+          error: 'Order not found.'
+        });
+
+      }
+
+
+      const order =
+        orderResult.rows[0];
+
+
+      /*
+       * Only direct bank-transfer orders
+       * can use this endpoint.
+       */
+
+      if (
+        order.payment_method !==
+        'bank_transfer'
+      ) {
+
+        await client.query('ROLLBACK');
+
+        return res.status(400).json({
+          error:
+            'This is not a direct bank transfer order.'
+        });
+
+      }
+
+
+      /*
+       * Prevent double stock deduction.
+       */
+
+      if (
+        order.payment_status === 'paid'
+      ) {
+
+        await client.query('COMMIT');
+
+        return res.json({
+          success: true,
+          alreadyProcessed: true,
+          message:
+            'This payment has already been confirmed.'
+        });
+
+      }
+
+
+      /*
+       * Get order items.
+       */
+
+      const itemsResult =
+        await client.query(
+          `
+            SELECT
+              product_id,
+              product_name,
+              quantity
+
+            FROM order_items
+
+            WHERE order_id = $1
+          `,
+          [order.id]
+        );
+
+
+      if (
+        itemsResult.rows.length === 0
+      ) {
+
+        throw new Error(
+          'NO_ORDER_ITEMS'
+        );
+
+      }
+
+
+      /*
+       * Deduct stock.
+       */
+
+      for (
+        const item of itemsResult.rows
+      ) {
+
+        const stockResult =
+          await client.query(
+            `
+              UPDATE products
+
+              SET stock_quantity =
+                stock_quantity - $1
+
+              WHERE id = $2
+                AND stock_quantity >= $1
+
+              RETURNING
+                id,
+                stock_quantity
+            `,
+            [
+              Number(item.quantity),
+              item.product_id
+            ]
+          );
+
+
+        if (
+          stockResult.rows.length === 0
+        ) {
+
+          throw new Error(
+            'INSUFFICIENT_STOCK:' +
+            item.product_name
+          );
+
+        }
+
+      }
+
+
+      /*
+       * Payment has been manually verified.
+       */
+
+      await client.query(
+        `
+          UPDATE orders
+
+          SET
+            payment_status = 'paid',
+            order_status = 'confirmed'
+
+          WHERE id = $1
+        `,
+        [order.id]
+      );
+
+
+      await client.query('COMMIT');
+
+
+      return res.json({
+        success: true,
+        alreadyProcessed: false,
+        message:
+          'Bank transfer confirmed successfully.',
+        orderReference:
+          order.order_ref
+      });
+
+
+    } catch (error) {
+
+      try {
+
+        await client.query(
+          'ROLLBACK'
+        );
+
+      } catch (rollbackError) {
+
+        console.error(
+          'Bank transfer confirmation rollback error:',
+          rollbackError
+        );
+
+      }
+
+
+      console.error(
+        'CONFIRM BANK TRANSFER ERROR:',
+        error
+      );
+
+
+      if (
+        error.message.startsWith(
+          'INSUFFICIENT_STOCK:'
+        )
+      ) {
+
+        const productName =
+          error.message.split(':')[1];
+
+        return res.status(409).json({
+          error:
+            'Not enough stock for ' +
+            productName +
+            '. Payment was not confirmed.'
+        });
+
+      }
+
+
+      return res.status(500).json({
+        error:
+          'Unable to confirm bank transfer.'
+      });
+
+
+    } finally {
+
+      client.release();
 
     }
 
