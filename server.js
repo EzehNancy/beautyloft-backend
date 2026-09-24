@@ -1596,6 +1596,65 @@ app.patch(
   }
 );
 
+app.patch(
+  '/admin/orders/:id/seen',
+  async function(req, res) {
+
+    if (!(await requireAdmin(req, res))) {
+      return;
+    }
+
+    try {
+
+      const result =
+        await pool.query(
+          `
+            UPDATE orders
+            SET admin_seen = 1
+            WHERE id = $1
+            RETURNING
+              id,
+              order_ref,
+              admin_seen
+          `,
+          [
+            req.params.id
+          ]
+        );
+
+
+      if (result.rows.length === 0) {
+
+        return res.status(404).json({
+          error: 'Order not found.'
+        });
+
+      }
+
+
+      res.json({
+        success: true,
+        order: result.rows[0]
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'MARK ORDER SEEN ERROR:',
+        error
+      );
+
+      res.status(500).json({
+        error:
+          'Failed to mark order as attended.'
+      });
+
+    }
+
+  }
+);
+
 app.post(
   '/checkout/create-order',
   async function(req, res) {
