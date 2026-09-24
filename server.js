@@ -1569,51 +1569,53 @@ const orderResult =
         const item of verifiedItems
       ) {
 
-        await client.query(
-          `
-            INSERT INTO order_items (
+       await client.query(
+  `
+    INSERT INTO order_items (
 
-              order_id,
-              product_id,
-              product_name,
+      order_id,
+      product_id,
+      product_name,
 
-              unit_price,
-              quantity,
+      unit_price,
+      price,
+      quantity,
 
-              size,
-              nail_type,
-              shape,
-              finish,
-              length,
+      size,
+      nail_type,
+      shape,
+      finish,
+      length,
 
-              image_url
+      image_url
 
-            )
+    )
 
-            VALUES (
-              $1, $2, $3,
-              $4, $5,
-              $6, $7, $8, $9, $10,
-              $11
-            )
-          `,
-          [
-            order.id,
-            item.productId,
-            item.name,
+    VALUES (
+      $1, $2, $3,
+      $4, $5, $6,
+      $7, $8, $9, $10, $11,
+      $12
+    )
+  `,
+  [
+    order.id,
+    item.productId,
+    item.name,
 
-            item.unitPrice,
-            item.quantity,
+    item.unitPrice,
+    item.unitPrice,
+    item.quantity,
 
-            item.size,
-            item.nailType,
-            item.shape,
-            item.finish,
-            item.length,
+    item.size,
+    item.nailType,
+    item.shape,
+    item.finish,
+    item.length,
 
-            item.image
-          ]
-        );
+    item.image
+  ]
+);
 
       }
 
