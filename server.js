@@ -1464,15 +1464,25 @@ const total =
 
 
       /*
-       * Your existing auth system uses
-       * req.session.userId.
-       */
+ * Get logged-in customer
+ * from Authorization token.
+ */
 
-      const userId =
-        req.session &&
-        req.session.userId
-          ? req.session.userId
-          : null;
+const userId =
+  await getUserIdFromToken(req);
+
+
+if (!userId) {
+
+  await client.query('ROLLBACK');
+
+  return res.status(401).json({
+    success: false,
+    message:
+      'Please log in before placing your order.'
+  });
+
+}
 
 
 const orderResult =
@@ -1499,6 +1509,7 @@ const orderResult =
         subtotal,
         delivery_fee,
         total,
+        total_amount,
 
         payment_status,
         order_status
@@ -1511,7 +1522,7 @@ const orderResult =
         $5, $6,
         $7, $8, $9, $10,
         $11,
-        $12, $13, $14,
+        $12, $13, $14, $15,
         'pending',
         'pending'
       )
@@ -1544,6 +1555,7 @@ const orderResult =
 
       subtotal,
       deliveryFee,
+      total,
       total
     ]
   );
