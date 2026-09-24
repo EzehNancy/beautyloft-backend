@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const crypto = require('crypto');
+
 const pool = require('./database.js');
 
 const app = express();
@@ -24,7 +24,13 @@ app.use(cors({
   }
 }));
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: function(req, res, buf) {
+      req.rawBody = buf;
+    }
+  })
+);
 
 async function getUserIdFromToken(req) {
   const authHeader = req.headers.authorization;
@@ -2787,7 +2793,7 @@ app.post(
           process.env.PAYSTACK_SECRET_KEY
         )
         .update(
-          JSON.stringify(req.body)
+          req.rawBody
         )
         .digest('hex');
 
