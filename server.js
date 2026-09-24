@@ -203,11 +203,26 @@ app.get('/admin/stats', async function(req, res) {
   );
   const totalProducts = parseInt(productsResult.rows[0].count, 10);
 
+  const pendingOrdersResult = await pool.query(
+  `
+    SELECT COUNT(*) AS count
+    FROM orders
+    WHERE payment_status = 'paid'
+    AND order_status = 'pending'
+  `
+);
+
+const pendingOrders =
+  parseInt(
+    pendingOrdersResult.rows[0].count,
+    10
+  );
+
   res.json({
     totalCustomers: totalCustomers,
     totalModels: totalModels,
     todaysAppointments: todaysAppointments,
-    pendingOrders: 0,
+    pendingOrders: pendingOrders,
     totalProducts: totalProducts,
     pendingModelApplications: pendingModelApplications
   });
