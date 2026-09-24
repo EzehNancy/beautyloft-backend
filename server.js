@@ -207,8 +207,7 @@ app.get('/admin/stats', async function(req, res) {
   `
     SELECT COUNT(*) AS count
     FROM orders
-    WHERE payment_status = 'paid'
-    AND order_status = 'pending'
+     WHERE admin_seen = 0
   `
 );
 
