@@ -1223,7 +1223,7 @@ function getNailTypePrice(nailType) {
 const LAGOS_DELIVERY_PRICES = {
 
   // Zone 1 — ₦2,500
-  'Ikeja': 2500 * 100,
+  'Ikeja': 1 * 100,
   'Allen Avenue': 2500 * 100,
   'Opebi': 2500 * 100,
   'Alausa': 2500 * 100,
