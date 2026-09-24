@@ -1813,6 +1813,232 @@ const orderResult =
   }
 );
 
+app.post(
+  '/payment/initialize',
+  async function(req, res) {
+
+    try {
+
+      const userId =
+        await getUserIdFromToken(req);
+
+
+      if (!userId) {
+
+        return res.status(401).json({
+          success: false,
+          error:
+            'Please log in before making payment.'
+        });
+
+      }
+
+
+      const { orderId } = req.body;
+
+
+      if (!orderId) {
+
+        return res.status(400).json({
+          success: false,
+          error:
+            'Order ID is required.'
+        });
+
+      }
+
+
+      /*
+       * Get the order directly from our database.
+       *
+       * IMPORTANT:
+       * We do NOT accept the payment amount
+       * from the frontend.
+       */
+
+      const orderResult =
+        await pool.query(
+          `
+            SELECT
+              id,
+              user_id,
+              order_ref,
+              email,
+              total,
+              payment_status
+            FROM orders
+            WHERE id = $1
+              AND user_id = $2
+            LIMIT 1
+          `,
+          [
+            orderId,
+            userId
+          ]
+        );
+
+
+      if (
+        orderResult.rows.length === 0
+      ) {
+
+        return res.status(404).json({
+          success: false,
+          error:
+            'Order not found.'
+        });
+
+      }
+
+
+      const order =
+        orderResult.rows[0];
+
+
+      if (
+        order.payment_status === 'paid'
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          error:
+            'This order has already been paid.'
+        });
+
+      }
+
+
+      if (
+        !order.email ||
+        !order.total
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          error:
+            'Order payment information is incomplete.'
+        });
+
+      }
+
+
+      /*
+       * Use BeautyLoft's order reference
+       * as the Paystack reference.
+       */
+
+      const paystackResponse =
+        await fetch(
+          'https://api.paystack.co/transaction/initialize',
+          {
+            method: 'POST',
+
+            headers: {
+              Authorization:
+                'Bearer ' +
+                process.env.PAYSTACK_SECRET_KEY,
+
+              'Content-Type':
+                'application/json'
+            },
+
+           body:
+  JSON.stringify({
+    email:
+      order.email,
+
+    amount:
+      String(order.total),
+
+    reference:
+      order.order_ref,
+
+    currency:
+      'NGN',
+
+    callback_url:
+      'https://beautyloft.vercel.app/payment-callback.html'
+  })
+          }
+        );
+
+
+      const paystackData =
+        await paystackResponse.json();
+
+
+      if (
+        !paystackResponse.ok ||
+        !paystackData.status
+      ) {
+
+        console.error(
+          'Paystack initialization error:',
+          paystackData
+        );
+
+        return res.status(502).json({
+          success: false,
+          error:
+            paystackData.message ||
+            'Unable to initialize payment.'
+        });
+
+      }
+
+
+      /*
+       * Save Paystack reference against
+       * the BeautyLoft order.
+       */
+
+      await pool.query(
+        `
+          UPDATE orders
+          SET payment_reference = $1
+          WHERE id = $2
+            AND user_id = $3
+        `,
+        [
+          paystackData.data.reference,
+          order.id,
+          userId
+        ]
+      );
+
+
+      return res.json({
+
+        success: true,
+
+        authorizationUrl:
+          paystackData.data.authorization_url,
+
+        reference:
+          paystackData.data.reference
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'Payment initialization error:',
+        error
+      );
+
+
+      return res.status(500).json({
+        success: false,
+        error:
+          'Unable to initialize payment.'
+      });
+
+    }
+
+  }
+);
+
 app.get(
   '/checkout/saved-measurements',
   async function(req, res) {
@@ -1903,6 +2129,414 @@ app.get(
         error:
           'Unable to load measurements.'
       });
+
+    }
+
+  }
+);
+
+app.get(
+  '/payment/verify/:reference',
+  async function(req, res) {
+
+    const client =
+      await pool.connect();
+
+
+    try {
+
+      const userId =
+        await getUserIdFromToken(req);
+
+
+      if (!userId) {
+
+        return res.status(401).json({
+          success: false,
+          error:
+            'Please log in to verify payment.'
+        });
+
+      }
+
+
+      const reference =
+        req.params.reference;
+
+
+      if (!reference) {
+
+        return res.status(400).json({
+          success: false,
+          error:
+            'Payment reference is required.'
+        });
+
+      }
+
+
+      /*
+       * Ask Paystack directly for the
+       * transaction status.
+       */
+
+      const paystackResponse =
+        await fetch(
+          'https://api.paystack.co/transaction/verify/' +
+          encodeURIComponent(reference),
+          {
+            method: 'GET',
+
+            headers: {
+              Authorization:
+                'Bearer ' +
+                process.env.PAYSTACK_SECRET_KEY
+            }
+          }
+        );
+
+
+      const paystackData =
+        await paystackResponse.json();
+
+
+      if (
+        !paystackResponse.ok ||
+        !paystackData.status
+      ) {
+
+        console.error(
+          'Paystack verification error:',
+          paystackData
+        );
+
+        return res.status(502).json({
+          success: false,
+          error:
+            paystackData.message ||
+            'Unable to verify payment.'
+        });
+
+      }
+
+
+      const transaction =
+        paystackData.data;
+
+
+      if (
+        transaction.status !== 'success'
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          paid: false,
+          error:
+            'Payment has not been completed.'
+        });
+
+      }
+
+
+      /*
+       * Begin our database transaction.
+       */
+
+      await client.query('BEGIN');
+
+
+      /*
+       * Lock the order while we process it.
+       *
+       * This prevents two verification
+       * requests from processing the same
+       * order at the same time.
+       */
+
+      const orderResult =
+        await client.query(
+          `
+            SELECT
+              id,
+              user_id,
+              order_ref,
+              total,
+              payment_status
+            FROM orders
+            WHERE payment_reference = $1
+              AND user_id = $2
+            LIMIT 1
+            FOR UPDATE
+          `,
+          [
+            reference,
+            userId
+          ]
+        );
+
+
+      if (
+        orderResult.rows.length === 0
+      ) {
+
+        await client.query('ROLLBACK');
+
+        return res.status(404).json({
+          success: false,
+          error:
+            'Order not found.'
+        });
+
+      }
+
+
+      const order =
+        orderResult.rows[0];
+
+
+      /*
+       * Already processed.
+       *
+       * Do NOT deduct stock again.
+       */
+
+      if (
+        order.payment_status === 'paid'
+      ) {
+
+        await client.query('COMMIT');
+
+        return res.json({
+          success: true,
+          paid: true,
+          orderReference:
+            order.order_ref
+        });
+
+      }
+
+
+      /*
+       * Verify the amount Paystack received
+       * matches our database total.
+       */
+
+      if (
+        Number(transaction.amount) !==
+        Number(order.total)
+      ) {
+
+        await client.query('ROLLBACK');
+
+        console.error(
+          'Payment amount mismatch:',
+          {
+            orderId: order.id,
+            expected:
+              order.total,
+            received:
+              transaction.amount
+          }
+        );
+
+        return res.status(400).json({
+          success: false,
+          paid: false,
+          error:
+            'Payment amount does not match the order total.'
+        });
+
+      }
+
+
+      /*
+       * Verify the Paystack reference.
+       */
+
+      if (
+        transaction.reference !==
+        order.order_ref
+      ) {
+
+        await client.query('ROLLBACK');
+
+        return res.status(400).json({
+          success: false,
+          paid: false,
+          error:
+            'Payment reference does not match the order.'
+        });
+
+      }
+
+
+      /*
+       * Get all products belonging
+       * to this order.
+       */
+
+      const itemsResult =
+        await client.query(
+          `
+            SELECT
+              product_id,
+              product_name,
+              quantity
+            FROM order_items
+            WHERE order_id = $1
+          `,
+          [
+            order.id
+          ]
+        );
+
+
+      if (
+        itemsResult.rows.length === 0
+      ) {
+
+        await client.query('ROLLBACK');
+
+        return res.status(400).json({
+          success: false,
+          paid: false,
+          error:
+            'No products were found for this order.'
+        });
+
+      }
+
+
+      /*
+       * Deduct stock.
+       *
+       * The UPDATE only succeeds when
+       * enough stock is still available.
+       */
+
+      for (
+        const item of itemsResult.rows
+      ) {
+
+        const stockResult =
+          await client.query(
+            `
+              UPDATE products
+
+              SET stock_quantity =
+                stock_quantity - $1
+
+              WHERE id = $2
+                AND stock_quantity >= $1
+
+              RETURNING
+                id,
+                stock_quantity
+            `,
+            [
+              Number(item.quantity),
+              item.product_id
+            ]
+          );
+
+
+        if (
+          stockResult.rows.length === 0
+        ) {
+
+          await client.query(
+            'ROLLBACK'
+          );
+
+          return res.status(409).json({
+            success: false,
+            paid: false,
+            error:
+              'There is no longer enough stock for ' +
+              item.product_name +
+              '. Please contact BeautyLoft.'
+          });
+
+        }
+
+      }
+
+
+      /*
+       * Everything is valid.
+       * Mark the order as paid.
+       */
+
+      await client.query(
+        `
+          UPDATE orders
+
+          SET
+            payment_status = 'paid',
+            payment_reference = $1,
+            order_status = 'confirmed'
+
+          WHERE id = $2
+            AND user_id = $3
+        `,
+        [
+          transaction.reference,
+          order.id,
+          userId
+        ]
+      );
+
+
+      /*
+       * Commit stock deduction and
+       * payment confirmation together.
+       */
+
+      await client.query('COMMIT');
+
+
+      return res.json({
+        success: true,
+        paid: true,
+        orderReference:
+          order.order_ref
+      });
+
+
+    } catch (error) {
+
+      try {
+
+        await client.query(
+          'ROLLBACK'
+        );
+
+      } catch (rollbackError) {
+
+        console.error(
+          'Rollback error:',
+          rollbackError
+        );
+
+      }
+
+
+      console.error(
+        'Payment verification error:',
+        error
+      );
+
+
+      return res.status(500).json({
+        success: false,
+        error:
+          'Unable to verify payment.'
+      });
+
+
+    } finally {
+
+      client.release();
 
     }
 
