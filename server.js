@@ -1434,6 +1434,76 @@ function getLagosDeliveryFee(area) {
 
 }
 
+app.get('/admin/orders', async function(req, res) {
+
+  if (!(await requireAdmin(req, res))) {
+    return;
+  }
+
+  try {
+
+    const ordersResult = await pool.query(`
+      SELECT *
+      FROM orders
+      WHERE payment_status = 'paid'
+      ORDER BY created_at DESC
+    `);
+
+    const orders = ordersResult.rows;
+
+
+    for (const order of orders) {
+
+      const itemsResult = await pool.query(
+        `
+          SELECT *
+          FROM order_items
+          WHERE order_id = $1
+          ORDER BY id ASC
+        `,
+        [order.id]
+      );
+
+      order.items = itemsResult.rows;
+
+
+      const measurementsResult =
+        await pool.query(
+          `
+            SELECT *
+            FROM order_measurements
+            WHERE order_id = $1
+            LIMIT 1
+          `,
+          [order.id]
+        );
+
+      order.measurements =
+        measurementsResult.rows[0] || null;
+
+    }
+
+
+    res.json({
+      orders: orders
+    });
+
+
+  } catch (error) {
+
+    console.error(
+      'ADMIN ORDERS ERROR:',
+      error
+    );
+
+    res.status(500).json({
+      error: 'Failed to load orders.'
+    });
+
+  }
+
+});
+
 app.post(
   '/checkout/create-order',
   async function(req, res) {
