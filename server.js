@@ -1457,11 +1457,19 @@ app.get('/admin/orders', async function(req, res) {
   try {
 
     const ordersResult = await pool.query(`
-      SELECT *
-      FROM orders
-      WHERE payment_status = 'paid'
-      ORDER BY created_at DESC
-    `);
+  SELECT *
+  FROM orders
+
+  WHERE
+    payment_status = 'paid'
+
+    OR (
+      payment_method = 'bank_transfer'
+      AND payment_status = 'pending'
+    )
+
+  ORDER BY created_at DESC
+`);
 
     const orders = ordersResult.rows;
 
