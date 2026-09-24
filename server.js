@@ -969,6 +969,101 @@ app.post('/admin/collections', async function(req, res) {
 });
 
 
+// Update a collection
+app.patch(
+  '/admin/collections/:id',
+  async function(req, res) {
+
+    if (!(await requireAdmin(req, res))) {
+      return;
+    }
+
+    try {
+
+      const {
+        name,
+        image_url,
+        is_featured,
+        is_active
+      } = req.body;
+
+
+      if (!name || !name.trim()) {
+
+        return res.status(400).json({
+          error:
+            'Collection name is required.'
+        });
+
+      }
+
+
+      const result =
+        await pool.query(
+          `
+          UPDATE collections
+          SET
+            name = $1,
+            image_url = $2,
+            is_featured = $3,
+            is_active = $4
+          WHERE id = $5
+          RETURNING *
+          `,
+          [
+            name.trim(),
+            image_url || '',
+            is_featured ? 1 : 0,
+            is_active ? 1 : 0,
+            req.params.id
+          ]
+        );
+
+
+      if (result.rows.length === 0) {
+
+        return res.status(404).json({
+          error:
+            'Collection not found.'
+        });
+
+      }
+
+
+      res.json({
+        success: true,
+        collection: result.rows[0]
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'UPDATE COLLECTION ERROR:',
+        error
+      );
+
+
+      if (error.code === '23505') {
+
+        return res.status(400).json({
+          error:
+            'That collection already exists.'
+        });
+
+      }
+
+
+      res.status(500).json({
+        error:
+          'Failed to update collection.'
+      });
+
+    }
+
+  }
+);
+
 // Delete a collection
 app.delete('/admin/collections/:id', async function(req, res) {
   if (!(await requireAdmin(req, res))) return;
@@ -991,6 +1086,50 @@ app.delete('/admin/collections/:id', async function(req, res) {
       error: 'Failed to delete collection.'
     });
   }
+});
+
+
+// Get public collections
+app.get('/collections', async function(req, res) {
+
+  try {
+
+    const result =
+      await pool.query(
+        `
+        SELECT
+          id,
+          name,
+          image_url,
+          is_featured,
+          is_active
+        FROM collections
+        WHERE is_active = 1
+        ORDER BY name ASC
+        `
+      );
+
+
+    res.json({
+      collections: result.rows
+    });
+
+
+  } catch (error) {
+
+    console.error(
+      'PUBLIC COLLECTIONS ERROR:',
+      error
+    );
+
+
+    res.status(500).json({
+      error:
+        'Failed to load collections.'
+    });
+
+  }
+
 });
 
 
