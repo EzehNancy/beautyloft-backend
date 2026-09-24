@@ -2453,6 +2453,103 @@ app.post(
 
   }
 );
+app.patch(
+  '/payment/bank-transfer',
+  async function(req, res) {
+
+    const userId =
+      await getUserIdFromToken(req);
+
+    if (!userId) {
+
+      return res.status(401).json({
+        error: 'Please log in first.'
+      });
+
+    }
+
+
+    const orderId =
+      Number(req.body.orderId);
+
+
+    if (!orderId) {
+
+      return res.status(400).json({
+        error: 'Order ID is required.'
+      });
+
+    }
+
+
+    try {
+
+      const result =
+        await pool.query(
+          `
+            UPDATE orders
+
+            SET
+              payment_method = 'bank_transfer',
+              payment_status = 'pending',
+              order_status = 'pending',
+              admin_seen = 0
+
+            WHERE id = $1
+              AND user_id = $2
+              AND payment_status != 'paid'
+
+            RETURNING
+              id,
+              order_ref,
+              payment_method,
+              payment_status,
+              order_status,
+              admin_seen,
+              total
+          `,
+          [
+            orderId,
+            userId
+          ]
+        );
+
+
+      if (result.rows.length === 0) {
+
+        return res.status(404).json({
+          error:
+            'Order not found or payment has already been confirmed.'
+        });
+
+      }
+
+
+      res.json({
+        success: true,
+        message:
+          'Bank transfer submitted for verification.',
+        order: result.rows[0]
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'BANK TRANSFER ERROR:',
+        error
+      );
+
+
+      res.status(500).json({
+        error:
+          'Unable to submit bank transfer for verification.'
+      });
+
+    }
+
+  }
+);
 
 app.get(
   '/checkout/saved-measurements',
