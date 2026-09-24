@@ -1180,6 +1180,55 @@ app.get('/products', async function(req, res) {
   res.json({ products: result.rows });
 });
 
+app.get('/products/favourites', async function(req, res) {
+
+  try {
+
+    const result = await pool.query(`
+      SELECT
+        p.*,
+        COALESCE(
+          SUM(oi.quantity),
+          0
+        ) AS total_bought
+
+      FROM products p
+
+      JOIN order_items oi
+        ON oi.product_id = p.id
+
+      JOIN orders o
+        ON o.id = oi.order_id
+
+      WHERE
+        p.is_active = 1
+        AND o.payment_status = 'paid'
+
+      GROUP BY p.id
+
+      ORDER BY total_bought DESC
+
+      LIMIT 5
+    `);
+
+    res.json({
+      products: result.rows
+    });
+
+  } catch (error) {
+
+    console.error(
+      'Favourites error:',
+      error
+    );
+
+    res.status(500).json({
+      error: 'Failed to load favourites.'
+    });
+
+  }
+
+});
 app.get('/products/:id', async function(req, res) {
   const result = await pool.query('SELECT * FROM products WHERE id = $1 AND is_active = 1', [req.params.id]);
   const product = result.rows[0];
