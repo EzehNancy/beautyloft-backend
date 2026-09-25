@@ -684,6 +684,120 @@ app.delete('/admin/availability-overrides/:date', async function(req, res) {
   res.json({ success: true });
 });
 
+app.get(
+  '/my-orders',
+  async function(req, res) {
+
+    try {
+
+      const userId =
+        await getUserIdFromToken(req);
+
+
+      if (!userId) {
+
+        return res.status(401).json({
+          error: 'Please log in first.'
+        });
+
+      }
+
+
+      /*
+        Only show REAL customer orders.
+
+        Draft orders are excluded because
+        the customer has not actually
+        submitted a payment method yet.
+      */
+
+      const ordersResult =
+        await pool.query(
+          `
+            SELECT
+              id,
+              order_ref,
+              subtotal,
+              delivery_fee,
+              total,
+              payment_method,
+              payment_status,
+              order_status,
+              created_at
+            FROM orders
+            WHERE user_id = $1
+              AND order_status != 'draft'
+            ORDER BY created_at DESC
+          `,
+          [userId]
+        );
+
+
+      const orders =
+        ordersResult.rows;
+
+
+      /*
+        Load items for each order
+      */
+
+      for (
+        const order of orders
+      ) {
+
+        const itemsResult =
+          await pool.query(
+            `
+              SELECT
+                id,
+                product_id,
+                product_name,
+                unit_price,
+                quantity,
+                size,
+                nail_type,
+                shape,
+                finish,
+                length,
+                image_url
+              FROM order_items
+              WHERE order_id = $1
+              ORDER BY id ASC
+            `,
+            [order.id]
+          );
+
+
+        order.items =
+          itemsResult.rows;
+
+      }
+
+
+      return res.json({
+        success: true,
+        orders: orders
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'MY ORDERS ERROR:',
+        error
+      );
+
+
+      return res.status(500).json({
+        error:
+          'Unable to load your orders.'
+      });
+
+    }
+
+  }
+);
+
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 });
