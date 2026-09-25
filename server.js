@@ -207,10 +207,16 @@ app.get('/admin/stats', async function(req, res) {
   `
     SELECT COUNT(*) AS count
     FROM orders
-     WHERE admin_seen = 0
+    WHERE admin_seen = 0
+      AND (
+        payment_status = 'paid'
+        OR (
+          payment_method = 'bank_transfer'
+          AND payment_status = 'pending'
+        )
+      )
   `
 );
-
 const pendingOrders =
   parseInt(
     pendingOrdersResult.rows[0].count,
@@ -1947,7 +1953,7 @@ const orderResult =
         $11,
         $12, $13, $14, $15,
         'pending',
-        'pending'
+        'draft'
       )
 
       RETURNING
@@ -2511,7 +2517,7 @@ app.patch(
             SET
               payment_method = 'bank_transfer',
               payment_status = 'pending',
-              order_status = 'pending',
+              order_status = 'draft',
               admin_seen = 0
 
             WHERE id = $1
