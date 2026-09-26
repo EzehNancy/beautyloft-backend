@@ -797,7 +797,77 @@ app.get(
 
   }
 );
+app.get('/my-measurements', async function(req, res) {
 
+  try {
+
+    const userId =
+      await getUserIdFromToken(req);
+
+
+    if (!userId) {
+
+      return res.status(401).json({
+        error: 'Not logged in.'
+      });
+
+    }
+
+
+    const result =
+      await pool.query(
+        `
+          SELECT
+            left_thumb,
+            left_index,
+            left_middle,
+            left_ring,
+            left_pinky,
+
+            right_thumb,
+            right_index,
+            right_middle,
+            right_ring,
+            right_pinky
+
+          FROM saved_measurements
+
+          WHERE user_id = $1
+        `,
+        [userId]
+      );
+
+
+    if (result.rows.length === 0) {
+
+      return res.json({
+        success: true,
+        measurements: null
+      });
+
+    }
+
+
+    return res.json({
+      success: true,
+      measurements: result.rows[0]
+    });
+
+
+  } catch (error) {
+
+    console.error(
+      'MY MEASUREMENTS ERROR:',
+      error
+    );
+
+    return res.status(500).json({
+      error: 'Unable to load measurements.'
+    });
+
+  }
+
+});
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 });
