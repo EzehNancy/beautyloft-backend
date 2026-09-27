@@ -156,15 +156,563 @@ app.post('/login', async function(req, res) {
   });
 });
 
-app.get('/me', async function(req, res) {
-  const userId = await getUserIdFromToken(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'Not logged in.' });
-  }
+app.get(
+  '/me',
+  async function(req, res) {
 
-  const result = await pool.query('SELECT id, name, email, is_admin FROM users WHERE id = $1', [userId]);
-  res.json({ user: result.rows[0] });
-});
+    try {
+
+      const userId =
+        await getUserIdFromToken(req);
+
+
+      if (!userId) {
+
+        return res.status(401).json({
+          error: 'Not logged in.'
+        });
+
+      }
+
+
+      const result =
+        await pool.query(
+          `
+            SELECT
+              id,
+              name,
+              email,
+              phone,
+              address_first_name,
+              address_last_name,
+              delivery_address,
+              delivery_area,
+              city,
+              state,
+              is_admin
+
+            FROM users
+
+            WHERE id = $1
+          `,
+          [userId]
+        );
+
+
+      if (result.rows.length === 0) {
+
+        return res.status(404).json({
+          error: 'User not found.'
+        });
+
+      }
+
+
+      return res.json({
+        success: true,
+        user: result.rows[0]
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'ME ERROR:',
+        error
+      );
+
+
+      return res.status(500).json({
+        error:
+          'Unable to load account.'
+      });
+
+    }
+
+  }
+);
+
+app.patch(
+  '/me',
+  async function(req, res) {
+
+    try {
+
+      const userId =
+        await getUserIdFromToken(req);
+
+
+      if (!userId) {
+
+        return res.status(401).json({
+          error: 'Not logged in.'
+        });
+
+      }
+
+
+      const name =
+        String(
+          req.body.name || ''
+        ).trim();
+
+
+      const email =
+        String(
+          req.body.email || ''
+        )
+          .trim()
+          .toLowerCase();
+
+
+      if (!name || !email) {
+
+        return res.status(400).json({
+          error:
+            'Name and email are required.'
+        });
+
+      }
+
+
+      const existingEmail =
+        await pool.query(
+          `
+            SELECT id
+            FROM users
+            WHERE LOWER(email) = LOWER($1)
+              AND id != $2
+          `,
+          [
+            email,
+            userId
+          ]
+        );
+
+
+      if (
+        existingEmail.rows.length > 0
+      ) {
+
+        return res.status(409).json({
+          error:
+            'That email address is already in use.'
+        });
+
+      }
+
+
+      const result =
+        await pool.query(
+          `
+            UPDATE users
+
+            SET
+              name = $1,
+              email = $2
+
+            WHERE id = $3
+
+            RETURNING
+              id,
+              name,
+              email
+          `,
+          [
+            name,
+            email,
+            userId
+          ]
+        );
+
+
+      return res.json({
+        success: true,
+
+        message:
+          'Account details updated.',
+
+        user:
+          result.rows[0]
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'UPDATE ACCOUNT ERROR:',
+        error
+      );
+
+
+      return res.status(500).json({
+        error:
+          'Unable to update account details.'
+      });
+
+    }
+
+  }
+);
+
+app.put(
+  '/my-measurements',
+  async function(req, res) {
+
+    try {
+
+      const userId =
+        await getUserIdFromToken(req);
+
+
+      if (!userId) {
+
+        return res.status(401).json({
+          error: 'Not logged in.'
+        });
+
+      }
+
+
+      const {
+        leftThumb,
+        leftIndex,
+        leftMiddle,
+        leftRing,
+        leftPinky,
+
+        rightThumb,
+        rightIndex,
+        rightMiddle,
+        rightRing,
+        rightPinky
+      } = req.body;
+
+
+      const measurements = [
+
+        leftThumb,
+        leftIndex,
+        leftMiddle,
+        leftRing,
+        leftPinky,
+
+        rightThumb,
+        rightIndex,
+        rightMiddle,
+        rightRing,
+        rightPinky
+
+      ];
+
+
+      const invalidMeasurement =
+        measurements.some(
+          function(value) {
+
+            return (
+              value === '' ||
+              value === null ||
+              value === undefined ||
+              Number.isNaN(
+                Number(value)
+              ) ||
+              Number(value) <= 0
+            );
+
+          }
+        );
+
+
+      if (invalidMeasurement) {
+
+        return res.status(400).json({
+          error:
+            'Please enter all nail measurements.'
+        });
+
+      }
+
+
+      const result =
+        await pool.query(
+          `
+            INSERT INTO saved_measurements (
+
+              user_id,
+
+              left_thumb,
+              left_index,
+              left_middle,
+              left_ring,
+              left_pinky,
+
+              right_thumb,
+              right_index,
+              right_middle,
+              right_ring,
+              right_pinky
+
+            )
+
+            VALUES (
+              $1,
+              $2, $3, $4, $5, $6,
+              $7, $8, $9, $10, $11
+            )
+
+            ON CONFLICT (user_id)
+
+            DO UPDATE SET
+
+              left_thumb =
+                EXCLUDED.left_thumb,
+
+              left_index =
+                EXCLUDED.left_index,
+
+              left_middle =
+                EXCLUDED.left_middle,
+
+              left_ring =
+                EXCLUDED.left_ring,
+
+              left_pinky =
+                EXCLUDED.left_pinky,
+
+              right_thumb =
+                EXCLUDED.right_thumb,
+
+              right_index =
+                EXCLUDED.right_index,
+
+              right_middle =
+                EXCLUDED.right_middle,
+
+              right_ring =
+                EXCLUDED.right_ring,
+
+              right_pinky =
+                EXCLUDED.right_pinky,
+
+              updated_at =
+                CURRENT_TIMESTAMP
+
+            RETURNING
+              left_thumb,
+              left_index,
+              left_middle,
+              left_ring,
+              left_pinky,
+
+              right_thumb,
+              right_index,
+              right_middle,
+              right_ring,
+              right_pinky
+          `,
+          [
+            userId,
+
+            Number(leftThumb),
+            Number(leftIndex),
+            Number(leftMiddle),
+            Number(leftRing),
+            Number(leftPinky),
+
+            Number(rightThumb),
+            Number(rightIndex),
+            Number(rightMiddle),
+            Number(rightRing),
+            Number(rightPinky)
+          ]
+        );
+
+
+      return res.json({
+        success: true,
+
+        message:
+          'Measurements saved.',
+
+        measurements:
+          result.rows[0]
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'SAVE MEASUREMENTS ERROR:',
+        error
+      );
+
+
+      return res.status(500).json({
+        error:
+          'Unable to save measurements.'
+      });
+
+    }
+
+  }
+);
+
+app.patch(
+  '/change-password',
+  async function(req, res) {
+
+    try {
+
+      const userId =
+        await getUserIdFromToken(req);
+
+
+      if (!userId) {
+
+        return res.status(401).json({
+          error: 'Not logged in.'
+        });
+
+      }
+
+
+      const {
+        currentPassword,
+        newPassword
+      } = req.body;
+
+
+      if (
+        !currentPassword ||
+        !newPassword
+      ) {
+
+        return res.status(400).json({
+          error:
+            'Current and new password are required.'
+        });
+
+      }
+
+
+      if (
+        newPassword.length < 8
+      ) {
+
+        return res.status(400).json({
+          error:
+            'Your new password must be at least 8 characters.'
+        });
+
+      }
+
+
+      const result =
+        await pool.query(
+          `
+            SELECT password_hash
+
+            FROM users
+
+            WHERE id = $1
+          `,
+          [userId]
+        );
+
+
+      if (
+        result.rows.length === 0
+      ) {
+
+        return res.status(404).json({
+          error: 'User not found.'
+        });
+
+      }
+
+
+      const passwordMatches =
+        await bcrypt.compare(
+          currentPassword,
+          result.rows[0].password_hash
+        );
+
+
+      if (!passwordMatches) {
+
+        return res.status(400).json({
+          error:
+            'Your current password is incorrect.'
+        });
+
+      }
+
+
+      const sameAsCurrent =
+        await bcrypt.compare(
+          newPassword,
+          result.rows[0].password_hash
+        );
+
+
+      if (sameAsCurrent) {
+
+        return res.status(400).json({
+          error:
+            'Your new password must be different from your current password.'
+        });
+
+      }
+
+
+      const newPasswordHash =
+        await bcrypt.hash(
+          newPassword,
+          10
+        );
+
+
+      await pool.query(
+        `
+          UPDATE users
+
+          SET password_hash = $1
+
+          WHERE id = $2
+        `,
+        [
+          newPasswordHash,
+          userId
+        ]
+      );
+
+
+      return res.json({
+        success: true,
+
+        message:
+          'Password updated successfully.'
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'CHANGE PASSWORD ERROR:',
+        error
+      );
+
+
+      return res.status(500).json({
+        error:
+          'Unable to change password.'
+      });
+
+    }
+
+  }
+);
 
 app.post('/logout', async function(req, res) {
   const authHeader = req.headers.authorization;
