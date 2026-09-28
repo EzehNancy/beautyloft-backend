@@ -558,6 +558,146 @@ app.put(
   }
 );
 
+/* ========================================
+   SAVE / UPDATE CUSTOMER ADDRESS
+======================================== */
+
+app.patch(
+  '/my-address',
+  async function(req, res) {
+
+    try {
+
+      const userId =
+        await getUserIdFromToken(req);
+
+
+      if (!userId) {
+
+        return res.status(401).json({
+          error: 'Not logged in.'
+        });
+
+      }
+
+
+      const {
+        firstName,
+        lastName,
+        phone,
+        deliveryArea,
+        address,
+        city,
+        state
+      } = req.body;
+
+
+      /* ========================================
+         VALIDATION
+      ======================================== */
+
+      if (
+        !firstName ||
+        !lastName ||
+        !phone ||
+        !deliveryArea ||
+        !address
+      ) {
+
+        return res.status(400).json({
+          error:
+            'Please complete all required address fields.'
+        });
+
+      }
+
+
+      /* ========================================
+         UPDATE USER
+      ======================================== */
+
+      const result =
+        await pool.query(
+          `
+            UPDATE users
+
+            SET
+              address_first_name = $1,
+              address_last_name = $2,
+              phone = $3,
+              delivery_area = $4,
+              delivery_address = $5,
+              city = $6,
+              state = $7
+
+            WHERE id = $8
+
+            RETURNING
+              address_first_name,
+              address_last_name,
+              phone,
+              delivery_area,
+              delivery_address,
+              city,
+              state
+          `,
+          [
+            String(firstName).trim(),
+            String(lastName).trim(),
+            String(phone).trim(),
+            String(deliveryArea).trim(),
+            String(address).trim(),
+            String(city || 'Lagos').trim(),
+            String(state || 'Lagos').trim(),
+            userId
+          ]
+        );
+
+
+      if (
+        result.rows.length === 0
+      ) {
+
+        return res.status(404).json({
+          error: 'User not found.'
+        });
+
+      }
+
+
+      /* ========================================
+         SUCCESS
+      ======================================== */
+
+      return res.json({
+        success: true,
+
+        message:
+          'Address saved successfully.',
+
+        address:
+          result.rows[0]
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        'SAVE ADDRESS ERROR:',
+        error
+      );
+
+
+      return res.status(500).json({
+        error:
+          'Unable to save address.'
+      });
+
+    }
+
+  }
+);
+
 app.patch(
   '/change-password',
   async function(req, res) {
