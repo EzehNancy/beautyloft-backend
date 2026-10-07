@@ -3272,7 +3272,7 @@ const paymentReference =
       String(order.total),
 
     reference:
-      order.order_ref,
+      paymentReference,
 
     currency:
       'NGN',
