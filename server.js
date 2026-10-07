@@ -4050,27 +4050,110 @@ async function completePaidOrder(
     };
 
 
-  } catch (error) {
+ } catch (error) {
 
-    try {
+  try {
 
+    await client.query(
+      'ROLLBACK'
+    );
+
+  } catch (rollbackError) {
+
+    console.error(
+      'Payment rollback error:',
+      rollbackError
+    );
+
+  }
+
+
+  /* ========================================
+     PAYMENT SUCCEEDED BUT STOCK IS GONE
+  ======================================== */
+
+  if (
+    error.message.startsWith(
+      'INSUFFICIENT_STOCK:'
+    )
+  ) {
+
+    const productName =
+      error.message
+        .split(':')
+        .slice(1)
+        .join(':');
+
+
+    /*
+     * IMPORTANT:
+     *
+     * Paystack already confirmed that
+     * the customer paid.
+     *
+     * The stock transaction was rolled
+     * back above, so NO stock from this
+     * order remains deducted.
+     *
+     * We now record the payment while
+     * flagging the order for attention.
+     */
+
+    const result =
       await client.query(
-        'ROLLBACK'
+        `
+          UPDATE orders
+
+          SET
+            payment_status = 'paid',
+            payment_reference = $1,
+            order_status = 'stock_issue'
+
+          WHERE payment_reference = $1
+
+          RETURNING
+            id,
+            order_ref
+        `,
+        [
+          transaction.reference
+        ]
       );
 
-    } catch (rollbackError) {
 
-      console.error(
-        'Payment rollback error:',
-        rollbackError
+    if (
+      result.rows.length === 0
+    ) {
+
+      throw new Error(
+        'ORDER_NOT_FOUND'
       );
 
     }
 
 
-    throw error;
+    return {
+      success: true,
+
+      paid: true,
+
+      stockIssue: true,
+
+      alreadyProcessed: false,
+
+      orderReference:
+        result.rows[0].order_ref,
+
+      unavailableProduct:
+        productName
+    };
 
   }
+
+
+  throw error;
+
+}
 
 }
 
@@ -4273,30 +4356,6 @@ app.get(
           paid: false,
           error:
             'No products were found for this order.'
-        });
-
-      }
-
-
-      if (
-        error.message.startsWith(
-          'INSUFFICIENT_STOCK:'
-        )
-      ) {
-
-        const productName =
-          error.message.split(':')
-            .slice(1)
-            .join(':');
-
-
-        return res.status(409).json({
-          success: false,
-          paid: false,
-          error:
-            'There is no longer enough stock for ' +
-            productName +
-            '. Please contact BeautyLoft.'
         });
 
       }
