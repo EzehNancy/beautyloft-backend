@@ -1403,16 +1403,28 @@ app.get(
         await pool.query(
           `
             SELECT
-              id,
-              order_ref,
-              subtotal,
-              delivery_fee,
-              total,
-              payment_method,
-              payment_status,
-              order_status,
-              created_at
-            FROM orders
+  id,
+  order_ref,
+  subtotal,
+  delivery_fee,
+  total,
+  payment_method,
+  payment_status,
+  order_status,
+
+  first_name,
+  last_name,
+  email,
+  phone,
+
+  delivery_address,
+  delivery_area,
+  city,
+  state,
+  delivery_instructions,
+
+  created_at
+FROM orders
             WHERE user_id = $1
               AND order_status != 'draft'
             ORDER BY created_at DESC
@@ -1485,6 +1497,7 @@ app.get(
 
   }
 );
+
 app.get('/my-measurements', async function(req, res) {
 
   try {
