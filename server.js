@@ -3234,10 +3234,19 @@ app.post(
       }
 
 
-      /*
-       * Use BeautyLoft's order reference
-       * as the Paystack reference.
-       */
+     /*
+ * Create a unique Paystack reference
+ * for every payment attempt.
+ *
+ * The BeautyLoft order reference stays
+ * the same, but Paystack gets a new
+ * transaction reference each time.
+ */
+
+const paymentReference =
+  order.order_ref +
+  '-' +
+  Date.now();
 
       const paystackResponse =
         await fetch(
@@ -3920,22 +3929,26 @@ async function completePaidOrder(
 
     }
 
+/*
+ * The order was already located using
+ * its saved Paystack payment_reference.
+ *
+ * BeautyLoft's order_ref and Paystack's
+ * transaction reference are intentionally
+ * different because every retry receives
+ * a fresh Paystack reference.
+ */
 
-    /*
-     * Make sure the Paystack reference
-     * belongs to this BeautyLoft order.
-     */
+if (
+  transaction.reference !==
+  reference
+) {
 
-    if (
-      transaction.reference !==
-      order.order_ref
-    ) {
+  throw new Error(
+    'REFERENCE_MISMATCH'
+  );
 
-      throw new Error(
-        'REFERENCE_MISMATCH'
-      );
-
-    }
+}
 
 
     /*
